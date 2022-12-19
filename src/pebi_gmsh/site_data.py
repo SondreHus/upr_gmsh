@@ -2,17 +2,19 @@ import numpy as np
 from typing import List
 from pebi_gmsh.polyline_interpolation import polyline_interpolation
 from dataclasses import dataclass
-from typing import (List)
+from typing import (List, Any)
 
 @dataclass
 class FConstraint:
-    points: np.ndarray = None   
+    points: Any = None   
     
     resolution: float = 0.1
 
+    radius_ratio: float = 1/2**0.5
+
 @dataclass
 class CConstraint:
-    points: np.ndarray = None   
+    points: Any = None   
     
     resolution: float = 0.1
 
@@ -77,16 +79,16 @@ class Intersection:
     distance: float = 0
 
     # Nodes created at the intersection for connecting line segment nodes to the intersection nodes
-    end_sites: tuple = None
+    end_sites: Any = None
 
     # Whether to fill the following segment with nodes
     split: bool = False
 
     # End vertex used for calculating the end_nodes placement
-    end_vertex: np.ndarray = None
+    end_vertex: Any = None
 
     # End vertex radius used for the intersection
     end_radius: float = 0
 
     # Edge at the end of the node for creating loops
-    end_edge: int = None
+    end_edge: Any = None

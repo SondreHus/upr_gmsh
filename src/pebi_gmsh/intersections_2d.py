@@ -5,7 +5,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 import matplotlib.pyplot as plt
 
-def polyline_intersections(A, B = None, accept_perfect_match = False):
+def polyline_intersections(A, B = None, self_intersect = False):
     """ 
         Finds intersections of 2 or one polyline
 
@@ -22,8 +22,6 @@ def polyline_intersections(A, B = None, accept_perfect_match = False):
     if B is None:
         B = A
         self_intersect = True
-    else:
-        self_intersect = False
     # Line segment indexing
     i = np.arange(A.shape[0]-1, dtype=np.uintc)
     j = np.arange(B.shape[0]-1, dtype=np.uintc)
@@ -55,6 +53,9 @@ def polyline_intersections(A, B = None, accept_perfect_match = False):
     ii = ii[np.where(rect)]
     jj = jj[np.where(rect)]
 
+    if ii.shape[0] == 0:
+        return np.zeros((0,2)), ii, jj
+
     A_d = A[ii+1]-A[ii]
     B_d = B[jj+1]-B[jj]
     a = scipy.sparse.csc_matrix(scipy.sparse.block_diag([*np.c_[A_d[:,0], -B_d[:,0], A_d[:,1], -B_d[:,1]].reshape((-1,2,2))]))
@@ -62,7 +63,7 @@ def polyline_intersections(A, B = None, accept_perfect_match = False):
 
     test = scipy.sparse.linalg.spsolve(a, b).reshape((-1,2))
 
-    idx = np.where(np.all(np.greater(test, 0) & np.less(test, 1), axis = 1))
+    idx = np.where(np.all(np.greater_equal(test, 0) & np.less(test, 1), axis = 1))
 
     points = A[ii[idx]] + A_d[idx]*test[idx,0].T
     return points, ii[idx], jj[idx]

@@ -3,13 +3,13 @@ import numpy as np
 from pebi_gmsh.convert_GMSH import convert_GMSH
 from pebi_gmsh.site_data import (SiteData)
 from typing import List
-def generate_constrained_mesh_2d(site_data: SiteData , h0 = 0.1, bounding_polygon = np.array([[0,0],[1,1]]), popup = False):
+def generate_constrained_mesh_2d(site_data: SiteData , h0 = 0.1, bounding_polygon = np.array([[0,0],[1,1]]), popup = False, algorithm = 5):
 
     # Initialize gmesh and set up the model
     gmsh.initialize()
     gmsh.model.add("MRST")
-    gmsh.option.setNumber("Mesh.Algorithm", 5)
-
+    gmsh.option.setNumber("Mesh.Algorithm", algorithm)
+    gmsh.option.setNumber('General.Terminal', 0)
     gmsh.option.setNumber("Mesh.MeshSizeExtendFromBoundary", 0)
     gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
     gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
@@ -19,10 +19,10 @@ def generate_constrained_mesh_2d(site_data: SiteData , h0 = 0.1, bounding_polygo
     # Add bounding box / polygon 
     if bounding_polygon.shape[0] == 2:
         
-        gmsh.model.geo.addPoint(bounding_polygon[0,0], bounding_polygon[0,1], 0, h0, 0)
-        gmsh.model.geo.addPoint(bounding_polygon[0,0], bounding_polygon[1,1], 0, h0, 1)
-        gmsh.model.geo.addPoint(bounding_polygon[1,0], bounding_polygon[1,1], 0, h0, 2)
-        gmsh.model.geo.addPoint(bounding_polygon[1,0], bounding_polygon[0,1], 0, h0, 3)
+        gmsh.model.geo.addPoint(bounding_polygon[0,0] + h0/2, bounding_polygon[0,1] + h0/2, 0, h0, 0)
+        gmsh.model.geo.addPoint(bounding_polygon[0,0] + h0/2, bounding_polygon[1,1] - h0/2, 0, h0, 1)
+        gmsh.model.geo.addPoint(bounding_polygon[1,0] - h0/2, bounding_polygon[1,1] - h0/2, 0, h0, 2)
+        gmsh.model.geo.addPoint(bounding_polygon[1,0] - h0/2, bounding_polygon[0,1] + h0/2, 0, h0, 3)
 
         gmsh.model.geo.addLine(0,1,0)
         gmsh.model.geo.addLine(1,2,1)
@@ -62,7 +62,7 @@ def generate_constrained_mesh_2d(site_data: SiteData , h0 = 0.1, bounding_polygo
     gmsh.model.mesh.embed(1,constraint_edge_idx, 2, 1)
     extend = gmsh.model.mesh.field.add("Extend")
     gmsh.model.mesh.field.set_numbers(extend, "CurvesList", constraint_edge_idx + [0,1,2,3])
-    gmsh.model.mesh.field.set_number(extend, "DistMax", 2)
+    gmsh.model.mesh.field.set_number(extend, "DistMax", 0.5)
     gmsh.model.mesh.field.set_number(extend, "SizeMax", h0)
 
     constant = gmsh.model.mesh.field.add("MathEval")
@@ -84,7 +84,6 @@ def generate_constrained_mesh_2d(site_data: SiteData , h0 = 0.1, bounding_polygo
     mesh_dict = convert_GMSH()
 
     gmsh.fltk.finalize()
-
     return mesh_dict
 
     

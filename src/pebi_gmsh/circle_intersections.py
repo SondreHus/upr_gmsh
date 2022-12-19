@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 normal_matrix = np.array([[0,-1],[1,0]])
 
 
-def circle_intersections(p_0, p_1, r_0, r_1):
+def circle_intersections(p_0, p_1, r_0, r_1, accept_nan = False):
     
     p_0 = p_0.reshape((-1,2))
     p_1 = p_1.reshape((-1,2))
@@ -24,10 +24,10 @@ def circle_intersections(p_0, p_1, r_0, r_1):
     x_0 = deltas*x/dists
     normals = (deltas/dists)@normal_matrix
     
-    
 
-    plt.scatter(p_0[:,0], p_0[:,1])
-    plt.scatter(p_1[:,0], p_1[:,1])
+    if (not accept_nan) and any(np.isnan(y)):
+        raise Exception("No intersection found")
+
     return p_0 + x_0 + normals*y , p_0 + x_0 - normals*y
 
 if __name__ == "__main__":
@@ -46,8 +46,8 @@ if __name__ == "__main__":
         rh[:,0], rh[:,1],
     )
     for i, r_i in enumerate(r):
-        circle_1 = plt.Circle((p[i,0], p[i,1]), r_i, color="b", fill=False)
-        circle_2 = plt.Circle((p[i+1,0], p[i+1,1]), r_i, color="r", fill=False)
+        circle_1 = plt.Circle((p[i,0], p[i,1]), r_i, color="b", fill=False) # type: ignore
+        circle_2 = plt.Circle((p[i+1,0], p[i+1,1]), r_i, color="r", fill=False)  # type: ignore
 
         ax.add_patch(circle_1)
         ax.add_patch(circle_2)
