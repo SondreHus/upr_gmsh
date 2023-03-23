@@ -19,10 +19,10 @@ def generate_constrained_mesh_2d(site_data: SiteData , h0 = 0.1, bounding_polygo
     # Add bounding box / polygon 
     if bounding_polygon.shape[0] == 2:
         
-        gmsh.model.geo.addPoint(bounding_polygon[0,0] + h0/2, bounding_polygon[0,1] + h0/2, 0, h0, 0)
-        gmsh.model.geo.addPoint(bounding_polygon[0,0] + h0/2, bounding_polygon[1,1] - h0/2, 0, h0, 1)
-        gmsh.model.geo.addPoint(bounding_polygon[1,0] - h0/2, bounding_polygon[1,1] - h0/2, 0, h0, 2)
-        gmsh.model.geo.addPoint(bounding_polygon[1,0] - h0/2, bounding_polygon[0,1] + h0/2, 0, h0, 3)
+        gmsh.model.geo.addPoint(bounding_polygon[0,0], bounding_polygon[0,1], 0, h0, 0)
+        gmsh.model.geo.addPoint(bounding_polygon[0,0], bounding_polygon[1,1], 0, h0, 1)
+        gmsh.model.geo.addPoint(bounding_polygon[1,0], bounding_polygon[1,1], 0, h0, 2)
+        gmsh.model.geo.addPoint(bounding_polygon[1,0], bounding_polygon[0,1], 0, h0, 3)
 
         gmsh.model.geo.addLine(0,1,0)
         gmsh.model.geo.addLine(1,2,1)

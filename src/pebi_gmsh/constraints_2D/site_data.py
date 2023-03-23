@@ -10,7 +10,7 @@ class FConstraint:
     
     resolution: float = 0.1
 
-    radius_ratio: float = 1/2**0.5
+    width_ratio: float = 1
 
 @dataclass
 class CConstraint:

@@ -13,7 +13,7 @@ def _append_vertices(voronoi: Voronoi, points):
     voronoi.vertices = np.r_[voronoi.vertices,points]
     return idx
 
-def clip_voronoi(voronoi: Voronoi, boundary = unit_square):
+def clip_pebi(voronoi: Voronoi, boundary = unit_square):
 
     # Setup usefull values
     area_max_dist = max(boundary[:,0]) - min(boundary[:,0]) + max(boundary[:,1]) - min(boundary[:,1])
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     comparrison_vertices = np.array(voronoi.vertices)
 
 
-    clip_voronoi(voronoi)
+    clip_pebi(voronoi)
     fig, ax = plt.subplots()
     voronoi_plot_2d(voronoi,ax = ax, show_vertices=False)
     plt.show()

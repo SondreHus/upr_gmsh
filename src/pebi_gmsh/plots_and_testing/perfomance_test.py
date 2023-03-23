@@ -4,11 +4,9 @@ from scipy.spatial import (Voronoi, voronoi_plot_2d, Delaunay)
 from pebi_gmsh.site_locations import create_site_locations
 from pebi_gmsh.generate_constrained_mesh import generate_constrained_mesh_2d
 from pebi_gmsh.site_data import (FConstraint, CConstraint)
-from pebi_gmsh.clip_pebi import clip_voronoi
+from pebi_gmsh.clip_pebi import clip_pebi
 from time import time
-from sympy import Point, Polygon, S
-from numpy import arange
-from numba import njit, prange
+
 
 def second_moments(polygon: np.ndarray):
     """The second moments of area of the polygon.
@@ -42,11 +40,6 @@ def second_moments(polygon: np.ndarray):
     
     v = x1*y2 - x2*y1
     I = np.abs(np.sum(v*(y1*y1 + y1*y2 +y2*y2 + x1*x1 + x1*x2 + x2*x2), axis=0))/12
-
-    # Ixy = np.sum(v*(x1*y2 + 2*x1*y1 + 2*x2*y2 + x2*y1),axis=0)
-    # Ix /= 12
-    # Iy /= 12
-    # Ixy /= 24
     return I
 
 
@@ -98,7 +91,6 @@ print(calculate_inertia(test[::-1,:]))
 x = np.linspace(0.1, 0.8, 100)
 y = 0.4 + 0.2*x**2
 
-
 line_1 = np.c_[x,y]
 line_2 = np.array([
     [0.2, 0.2],
@@ -109,6 +101,12 @@ line_3 = np.array([
     [0.6, 0.9],
     [0.7, 0.2]
 ])
+
+h = 0.1
+
+f_1 = FConstraint(line_1, 0.08)
+f_2 = FConstraint(line_2, 0.08)
+c_1 = CConstraint(line_3, 0.08)
 
 
 
@@ -149,9 +147,9 @@ if recalculate:
         # comparrison_points = np.random.random((mesh["node_coords"].reshape((-1,3))[:,:2].shape[0], 2))
         best_voronoi = Voronoi(best_points)
         worst_voronoi = Voronoi(worst_points)
-        clip_voronoi(best_voronoi)
-        clip_voronoi(worst_voronoi)
-        clip_voronoi(voronoi)
+        clip_pebi(best_voronoi)
+        clip_pebi(worst_voronoi)
+        clip_pebi(voronoi)
         
         vertices = np.array(voronoi.vertices)
         fig, ax = plt.subplots()

@@ -3,14 +3,10 @@
 import numpy as np
 from pebi_gmsh.circle_intersections import circle_intersections
 from pebi_gmsh.intersections_2d import polyline_intersections
-from pebi_gmsh.f_segments import (FSegment, create_f_segments)
-from pebi_gmsh.c_segments import (CSegment, create_c_segments, generate_protection_sites)
+from pebi_gmsh.f_segments import (create_f_segments)
+from pebi_gmsh.c_segments import (create_c_segments, generate_protection_sites)
 from pebi_gmsh.site_data import (SiteData, Intersection, FConstraint, CConstraint)
-from dataclasses import dataclass
 from typing import List
-from pebi_gmsh.circumcircle import circumcircle
-
-import matplotlib.pyplot as plt
 
 
 def create_site_locations(f_constraints: List[FConstraint] = [], c_constraints: List[CConstraint] = []):
@@ -172,18 +168,6 @@ def create_site_locations(f_constraints: List[FConstraint] = [], c_constraints: 
                             ]))
                         old_site_idx = new_site_idx
                         
-
-
-
-                    # new_site_idx = data.add_sites(np.vstack((site_5, site_0, site_1, site_2, site_3, site_4)))
-                    # new_edges = np.c_[new_site_idx, np.roll(new_site_idx, -1)].tolist() + \
-                    #     [[new_site_idx[0], new_site_idx[3]], [new_site_idx[0], new_site_idx[4]], [new_site_idx[1], new_site_idx[3]]]
-                    
-                    # edge_idx = data.add_edges(np.array(new_edges))
-                    # data.f_edge_loops += [edge_idx[:6]]
-
-                    # r = np.linalg.norm(site_1 + site_2 - steps*mean)
-                    # end_r = np.linalg.norm(point - mean * steps +  res_0 * steps - new_sites[2])
                     
                     node_order = int(orientation*aligned[k])
                     intersection_index = 1 if node_order == 1 else 0
@@ -287,7 +271,7 @@ def create_site_locations(f_constraints: List[FConstraint] = [], c_constraints: 
                 
     for i in range(len(f_constraints)):
         data.f_intersections[i].sort(key = lambda x: x.distance)
-        segments = create_f_segments(data.f_intersections[i], f_constraints[i].resolution, 1, data.f_interps[i], data.f_dist[i][-1])
+        segments = create_f_segments(data.f_intersections[i], f_constraints[i].resolution, f_constraints[i].width_ratio, data.f_interps[i], data.f_dist[i][-1])
         for segment in segments:
             sites_l, sites_r = circle_intersections(segment.vertices[:-1,:], segment.vertices[1::,:], segment.radiuses[:-1,:], segment.radiuses[1:,:])
 
@@ -330,11 +314,12 @@ def create_site_locations(f_constraints: List[FConstraint] = [], c_constraints: 
                 ([] if segment.end_site_idx is None else [segment.end_site_idx])
             if len(segment_site_idx) > 1:
                 data.add_edges(np.array([segment_site_idx[:-1], segment_site_idx[1:]]).T)
-        
-            protection_nodes_l, protection_nodes_r = generate_protection_sites(segment.sites, c_constraints[i].resolution, c_constraints[i].resolution, 1)
+
+            
+            protection_nodes_l, protection_nodes_r = generate_protection_sites(segment.sites, c_constraints[i].resolution, c_constraints[i].resolution, c_constraints[i].protection_sites)
             
             old_sites_l = old_sites_r = new_sites
-            for i in range(1):
+            for i in range(c_constraints[i].protection_sites):
                 new_sites_l = data.add_sites(protection_nodes_l[i])
                 data.add_edges(np.array([new_sites_l[:-1], new_sites_l[1:]]).T)
                 data.add_edges(np.array([new_sites_l[:-1], old_sites_l[1:]]).T)
