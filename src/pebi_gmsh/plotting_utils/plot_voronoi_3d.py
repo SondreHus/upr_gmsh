@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import plotly.figure_factory as ff
 from scipy.spatial import Voronoi
 def get_voronoi_edges(voronoi, points):
@@ -26,17 +25,17 @@ def inside_box(points, bounding_box, padding = 0):
             (points[:, 2] - padding <= bounding_box[5])
 
 
-
-def plot_voronoi_3d(voronoi: Voronoi, bounding_box = [0,1,0,1,0,1], padding = 0.2, sites = None):
+bounding_box = [0,1,0,1,0,1]
+def plot_voronoi_3d(voronoi: Voronoi, b_plane_normals, b_plane_d, padding = .2, sites = None):
    
     # edges = get_voronoi_edges(voronoi, points)
     vertices = voronoi.vertices
+    inside = np.ones(voronoi.points.shape[0], dtype=bool)
+    for i in range(b_plane_normals.shape[0]):
+        inside = np.logical_and(inside, np.sum(voronoi.points * b_plane_normals[i], axis=1) < -b_plane_d[i])        
+    # accepted_sites = (voronoi.points[:,1] < 0.5) & inside_box(voronoi.points, bounding_box)
 
-
-
-    accepted_sites = (voronoi.points[:,1] < 0.5) & inside_box(voronoi.points, bounding_box)
-
-    border_ridges = np.where(accepted_sites[voronoi.ridge_points[:,0]] != accepted_sites[voronoi.ridge_points[:,1]])[0]
+    border_ridges = np.where(inside[voronoi.ridge_points[:,0]] != inside[voronoi.ridge_points[:,1]])[0]
     tris = []
     for ridge_id in border_ridges:
         ridge = voronoi.ridge_vertices[ridge_id]
@@ -47,9 +46,9 @@ def plot_voronoi_3d(voronoi: Voronoi, bounding_box = [0,1,0,1,0,1], padding = 0.
     
     tris = tris[np.any(tris == -1, axis = 1) == False]
 
-    inside = np.all(inside_box(vertices[tris].reshape(-1,3), bounding_box, 0.03).reshape(-1,3), axis=1)
+    # inside = np.all(inside_box(vertices[tris].reshape(-1,3), bounding_box, 0.03).reshape(-1,3), axis=1)
     
-    tris = tris[inside]
+    # tris = tris[inside]
     
     fig = ff.create_trisurf(vertices[:,0], vertices[:,1], vertices[:,2],tris, "Portland")
     

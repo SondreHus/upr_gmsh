@@ -11,7 +11,7 @@ def flatten_sphere_centers(centers: np.ndarray):
         centers (np.ndarray): _description_
         radii (np.ndarray): _description_
     """
-
+    centers = centers.reshape(-1,3,3)
     # TODO: Fix linear centers
     c_0 = centers[:, 0, :].reshape(-1,1,3).copy()
     flattened_centers = centers - c_0
