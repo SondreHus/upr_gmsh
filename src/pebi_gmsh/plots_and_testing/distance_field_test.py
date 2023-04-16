@@ -144,7 +144,7 @@ def create_test_surface(m, n, w=1, h=1, f = lambda x, y: x*0.1 + 0.1):
     tris = []
     for x in range(m):
         for y in range(n):
-            surface.append([x*w/m,y*h/n, f(x*w/m,y*h/n)])
+            surface.append([x*w/(m-1),y*h/(n-1), f(x*w/(m-1),y*h/(n-1))])
     
     for x in range(m-1):
         for y in range(n-1):
@@ -165,6 +165,26 @@ def create_test_surface(m, n, w=1, h=1, f = lambda x, y: x*0.1 + 0.1):
 #         "zaxis": {"range": [0,1]},
 # })
 # fig.show()
+
+#field_0 = InscribedCircleField(normal, triangle)
+#field_1 = InscribedCircleField(normal, triangle[::-1,:])
+#field_2 = InscribedCircleField(normal, triangle @ np.array([[1,0,0],[0,1,0],[0,0,-1]]))
+normal = np.array([0,0,1])
+
+start = time()
+verts, tris = create_test_surface(20,20,1,1, lambda x, y: 0.1 * np.random.rand() + 0.02) 
+surface = np.zeros((200,200))
+field = InscribedCircleField(normal, verts[tris])
+for i in range(200):
+    print(i)
+    for j in range(200):
+        # assert np.isclose(a,b) and np.isclose(a,c) and np.isclose(b,c)
+        surface[j,i] = field.distance(np.array([i/200, j/200, 0]))# field_1.distance(np.array([i/200, j/200, 0])))
+
+print(time()-start)
+plt.imshow(surface)
+plt.show()
+
 test_dims = [3, 10, 100, 1000, 10000]
 
 
@@ -197,7 +217,6 @@ for dim in test_dims:
 
 
     triangle = np.roll(np.array([[0.35, 0.5, 0.1],[0.5, 0.5, 0.1],[0.35, 0.7, -0.4]]), 0, axis=0)
-    normal = np.array([0,0,1])
     verts, tris = create_test_surface(dim, dim)
 
     
@@ -231,21 +250,7 @@ for dim in test_dims:
     #tri_nodes = tri_nodes.reshape(-1,3) - 1
     gmsh.fltk.run()
 
-# field_0 = InscribedCircleField(normal, triangle)
-# field_1 = InscribedCircleField(normal, triangle[::-1,:])
-# field_2 = InscribedCircleField(normal, triangle @ np.array([[1,0,0],[0,1,0],[0,0,-1]]))
 
-# surface = np.zeros((200,200))
-# for i in range(200):
-#     for j in range(200):
-#         a = field_0.distance(np.array([i/200, j/200, 0]))
-#         b = field_1.distance(np.array([i/200, j/200, 0]))
-#         c = field_2.distance(np.array([i/200, j/200, 0]))
-#         assert np.isclose(a,b) and np.isclose(a,c) and np.isclose(b,c)
-#         surface[j,i] = field_0.distance(np.array([i/200, j/200, 0]))# field_1.distance(np.array([i/200, j/200, 0])))
-
-# plt.imshow(surface)
-# plt.show()
 # gmsh.model.mesh.field.add("ExternalProcess")
 # gmsh.model.mesh.field.set_string(command_test_field, "CommandLine", "python " + "src/pebi_gmsh/utils_3D/inscribed_circle_field.py " + "0.1 0.001")#os.path.join(current, "src", "pebi_gmsh", "utils_3D", "inscribed_circle_field.py"))
 
