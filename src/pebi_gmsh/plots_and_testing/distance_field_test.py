@@ -113,29 +113,7 @@ points_plane_0 = np.array([
 # Test of point distance
 
 
-def triangle_inscribed_circle_field(triangles, origin_normal):
-    """constructs an inscribed triangle density field
 
-    Args:
-        points (_type_): vertices of the triangle
-        origin_normal (_type_): normal of the plane utilizing the density field
-
-    Returns:
-        _type_: _description_
-    """
-
-    data_path = os.path.join(current, "src", "pebi_gmsh", "data", "constraint_array.npy")    
-
-    np.save(data_path, np.r_[origin_normal.flatten(), triangles.flatten()])
-
-    id = gmsh.model.mesh.field.add("ExternalProcess")
-    gmsh.model.mesh.field.set_string(id, "CommandLine", 
-                                    "python " + 
-                                    "src/pebi_gmsh/utils_3D/inscribed_circle_field.py " + 
-                                    ' ' + data_path)#os.path.join(current, "src", "pebi_gmsh", "utils_3D", "inscribed_circle_field.py"))
-    
-    #.join(map(str, np.vstack((origin_normal, vertices)).flatten()))
-    return id
 
 def create_test_surface(m, n, w=1, h=1, f = lambda x, y: x*0.1 + 0.1):
 
@@ -172,7 +150,7 @@ def create_test_surface(m, n, w=1, h=1, f = lambda x, y: x*0.1 + 0.1):
 normal = np.array([0,0,1])
 
 start = time()
-verts, tris = create_test_surface(20,20,1,1, lambda x, y: 0.1 * np.random.rand() + 0.02) 
+verts, tris = create_test_surface(20,20,1,1, lambda x, y: 0.1 * np.random.rand() - 0.1*x) 
 surface = np.zeros((200,200))
 field = InscribedCircleField(normal, verts[tris])
 for i in range(200):

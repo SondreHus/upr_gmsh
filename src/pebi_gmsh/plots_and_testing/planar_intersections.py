@@ -127,4 +127,4 @@ for a, b in voronoi.ridge_points:
     neighbouring_nodes[b].append(a)
 
 
-print("Yo")
+

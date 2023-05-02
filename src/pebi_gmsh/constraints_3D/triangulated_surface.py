@@ -43,13 +43,14 @@ class TriangulatedSurface:
     # Triangles adjacent to each edge
     edge_tris: list
     
-    def __init__(self, vertices = None, triangles: np.ndarray = None) -> None:
+    def __init__(self, vertices = None, triangles: np.ndarray = None, radii: np.ndarray = None, constricted_radii: np.ndarray = None) -> None:
         self.vert_coords = vertices
         self.tri_verts = triangles
         self.tri_edges = np.zeros(triangles.shape)
         self.edge_dict = {}
         self.vert_tris = [[] for i in range(vertices.shape[0])]
-        self.vertex_radii = np.zeros(vertices.shape[0])
+        self.vertex_radii = np.zeros(vertices.shape[0]) if radii is None else radii
+        self.constricted_radii = np.zeros(vertices.shape[0], dtype=bool) if constricted_radii is None else constricted_radii
         self.edge_tris = []
         
         
@@ -76,7 +77,7 @@ class TriangulatedSurface:
         
         # Naive vertex radii
         current_radius = np.zeros(vertices.shape[0])
-        edge_num = np.zeros(vertices.shape[0])
+        # edge_num = np.zeros(vertices.shape[0])
 
         # flattened_triangles, *_ = flatten_sphere_centers(vertices[triangles])
 
@@ -87,16 +88,15 @@ class TriangulatedSurface:
         
         edge_dists = np.sqrt(np.sum((self.vert_coords[self.edges[:,0]] - self.vert_coords[self.edges[:,1]])**2, axis=-1))
         for i, edge in enumerate(self.edges):
-            current_radius[edge[0]] += edge_dists[i]
-            current_radius[edge[1]] += edge_dists[i]
-            edge_num[edge[0]] += 1
-            edge_num[edge[1]] += 1
+            current_radius[edge[0]] = max(current_radius[edge[0]], edge_dists[i])
+            current_radius[edge[1]] = max(current_radius[edge[1]], edge_dists[i])
 
-        current_radius = current_radius * 0.866 / edge_num
+
+        current_radius = current_radius * 0.61
 
         # # Calculate minimum radius for each vertex
 
-        # min_radius = np.zeros(vertices.shape[0])
+        min_radius = np.zeros(vertices.shape[0])
 
         # for comp_vertex_id, tri in enumerate(triangles):
         #     # comp = np.array([[1,2],[2,0],[0,1]])
@@ -224,7 +224,7 @@ class TriangulatedSurface:
         #     outer[tri_ids] = new_outer
         #     inner[tri_ids] = new_inner
         
-        self.vertex_radii = current_radius
+        self.vertex_radii = np.where(constricted_radii, self.vertex_radii, current_radius)
     
     
 

@@ -3,7 +3,7 @@ from  scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 
 def flatten_sphere_centers(centers: np.ndarray):
-    """Converts a set of 3d coordinates into sets where the first point is at origo, the second is at x=0,
+    """Converts a set of 3d point triplets into sets where the first point is at origo, the second is at x=0,
     all three are at z=0 and the orientation of the triangle normal is [0,0,1].
     Additionally returns the necesssary angles and offsets to revert this change.
 
@@ -36,7 +36,7 @@ def flatten_sphere_centers(centers: np.ndarray):
         [-v[:, 1], v[:, 0], z]]
     ), 2, 0)
     
-    k = np.where(np.isclose(s, 0), 0.5, ((1 - c) / (s ** 2))).reshape(-1,1,1)
+    k = np.where(np.isclose(s, 0), 1, ((1 - c) / (s ** 2))).reshape(-1,1,1)
 
     rotation_matrix = (np.eye(3) + kmat + kmat@kmat * k)
 
@@ -48,7 +48,6 @@ def flatten_sphere_centers(centers: np.ndarray):
 
     rotation_matrix_inv = (np.eye(3) + kmat_inv + kmat_inv@kmat_inv * k)
 
-    #Pain sluttet her
     flattened_centers =  flattened_centers @ rotation_matrix
 
     z_angles = -np.arctan2(flattened_centers[:,1,1], flattened_centers[:,1,0])
@@ -98,6 +97,15 @@ def flatten_sphere_centers(centers: np.ndarray):
 #     return rotation_matrix
 
 def sphere_intersections(centers, radii):
+    """Returns the intersections on both sides of a set of point triplets and their radii
+
+    Args:
+        centers (_type_): _description_
+        radii (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     plane_centers, offset, rotation = flatten_sphere_centers(centers)
 
     d = plane_centers[:, 1, 0]
@@ -115,6 +123,37 @@ def sphere_intersections(centers, radii):
 
     return (np.c_[x,y,z].reshape((-1,1,3))@rotation + offset).reshape(-1,3), (np.c_[x,y,-z].reshape((-1,1,3))@rotation + offset).reshape(-1,3)
 
+
+
+def flatten_planar_centers(centers, normal):
+    
+    origo = centers[0]
+    centers = centers - origo
+    up = np.array([0,0,1])
+
+    if np.all(np.isclose(normal, -up)):
+        matrix = np.diag([-1,1,1])
+        return centers@matrix.T, matrix, origo
+
+    v = np.cross(normal, up)
+
+    c = np.sum(normal*up)
+    
+    s = np.linalg.norm(v)
+
+    kmat = np.array([
+        [0, -v[2], v[1]], 
+        [v[2], 0, -v[0]], 
+        [-v[1], v[0], 0]]
+    )
+
+    k = 1 if np.isclose(s,0) else (1 - c) / (s ** 2)
+
+    rotation_matrix = (np.eye(3) + kmat + kmat@kmat * k)
+    rotation_matrix_inv = (np.eye(3) - kmat + kmat@kmat * k)
+    return centers @ rotation_matrix.T, rotation_matrix_inv, origo
+
+
 def plot_sphere(center, radius, ax):
     u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:20j]
     x = np.cos(u)*np.sin(v)*radius + center[0]
@@ -124,7 +163,6 @@ def plot_sphere(center, radius, ax):
 
 if __name__ == "__main__":
 
- 
 
     test = np.array([[[0,0,0],[1,1,0],[1,1,1]], [[0,5,0],[1,4,0],[1,122,1]]])
 

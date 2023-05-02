@@ -5,7 +5,21 @@ normal_matrix = np.array([[0,-1],[1,0]])
 
 
 def circle_intersections(p_0, p_1, r_0, r_1, accept_nan = False):
-    
+    """Returns the intersection points of two sets of circles.
+
+    Args:
+        p_0 (_type_): First circle set centroids
+        p_1 (_type_): Second circle set centroids
+        r_0 (_type_): First circle set radii
+        r_1 (_type_): Second circle set radii
+        accept_nan (bool, optional): If False, raises error if any intersection is impossible. Defaults to False.
+
+    Raises:
+        Exception: _description_
+
+    Returns:
+        Two sets of points, the first on the right-hand side of the vector p_1-p_0, the other set is on the opposite side.
+    """
     p_0 = p_0.reshape((-1,2))
     p_1 = p_1.reshape((-1,2))
 

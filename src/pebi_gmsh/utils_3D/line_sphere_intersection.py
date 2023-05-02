@@ -18,6 +18,7 @@ def sphere_line_reduction(center, radius, min_radius, point, direction):
     c = np.sum(diff**2, axis=-1) - radius**2
     return (-b + np.sqrt(b**2 - a*c))/a, (-b - np.sqrt(b**2 - a*c))/a 
 
+
 if __name__ == "__main__":
 
     center = np.array([[0,0,0]])

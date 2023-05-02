@@ -3,10 +3,13 @@ from numba import njit, jit
 from numba.experimental import jitclass
 from typing import List
 from numba import float32
+import os
+import gmsh
 # Here we lay out the "Inscribed circle distances"
 
 
-def planar_distance(origin_normal, target_point, target_normal, tol = 1e-5):
+# @jit
+def planar_distance(origin_normal: np.ndarray, target_point: np.ndarray, target_normal: np.ndarray, tol = 1e-5):
     
     factor = 1 - np.sum((origin_normal*target_normal), axis=-1)
 
@@ -18,23 +21,23 @@ def planar_distance(origin_normal, target_point, target_normal, tol = 1e-5):
     target_normal = np.divide(target_normal, factor[:,None], np.zeros_like(target_normal), where = factor[:,None] > tol)
     return D_t, target_normal
 
-
-def line_distance(p_o, n_o, p_t, n_t, tol = 1e-5):
-    a = n_o[:, None, :] - np.sum(n_o[:, None, :]*n_t, axis=-1)[:, :, None] * n_t
-    b = (p_o - p_t) - np.sum((p_o - p_t)*n_t, axis=-1)[:, :, None]*n_t
-    a_mag = np.sum(a*a,axis=-1)-1
+@jit
+def line_distance(p_o: np.ndarray, n_o: np.ndarray, p_t: np.ndarray, n_t: np.ndarray, tol = 1e-5):
+    a = np.expand_dims(n_o, 1)- np.expand_dims(np.sum(np.expand_dims(n_o, 1)*n_t, axis=-1),2) * n_t
+    # b = (p_o - p_t) - np.sum((p_o - p_t)*n_t, axis=-1)[:, :, None]*n_t
+    # a_mag = np.sum(a*a,axis=-1)-1
     # if abs(np.dot(a,a)-1) < 1e-5:
-    h = np.sum(n_o[:, None, :]*(p_t-p_o), axis=-1)
-    d = np.sum(np.cross(n_t, n_o[:,None,:])*(p_o-p_t),axis=-1)
-    flat_dist = (d**2/h + h)/2
-    dist = (-np.sum(a*b, axis=-1) - np.sqrt(np.sum(a*b, axis=-1)**2 - np.sum(b**2, axis=-1)*a_mag))/a_mag
-    return np.where(abs(a_mag) > tol, dist, flat_dist)
+    # h = np.sum(n_o[:, None, :]*(p_t-p_o), axis=-1)
+    # d = np.sum(np.cross(n_t, n_o[:,None,:])*(p_o-p_t),axis=-1)
+    # flat_dist = (d**2/h + h)/2
+    # dist = np.divide((-np.sum(a*b, axis=-1) - np.sqrt(np.sum(a*b, axis=-1)**2 - np.sum(b**2, axis=-1)*a_mag)), a_mag, where=abs(a_mag) > tol, out = flat_dist)
+    return a #dist # np.where(abs(a_mag) > tol, dist, flat_dist)
     # return "Sqrt(((y-({}))*{} - (z-({}))*{})^2 + ((z-({}))*{} - (x-({}))*{})^2  + ((x-({}))*{} - (y-({}))*{})^2)"\
     #     .format(p[1], dir[2], p[2], dir[1], p[3], dir[0], p[0], dir[3], p[0], dir[1], p[1], dir[0])
 
 # Safe for 2-sidige problemer
-
-def point_distance(p_o, n_o, p_t):
+# @jit
+def point_distance(p_o: np.ndarray, n_o: np.ndarray, p_t: np.ndarray):
     # assert not np.isclose(2*np.sum((p_o-p_t)*n_o),0)
     return -np.sum((p_o-p_t)**2, axis=-1)/(2*np.sum((p_o-p_t)*n_o, axis=-1))
 
@@ -83,7 +86,7 @@ class InscribedCircleField:
         self.t_normals = self.t_normals / np.sqrt(np.sum(self.t_normals ** 2, axis=1))[:, None]
         self.t_ds = -np.sum(self.t_normals * tri_points[:,0], axis=1)
 
-        # Linear inscribed distance formula between the place ends up being a linear formula f(xyz) = N*xyz + D
+        # Linear inscribed distance formula between the planes ends up being a linear formula f(xyz) = N*xyz + D
         # The formula varies based on the sign of the origin, since is assumes the inscribed sphere has its center in the positive origin normal direction
         self.D_0, self.N_0 = planar_distance(origin_normal, tri_points[:,0], self.t_normals)
         self.D_1, self.N_1 = planar_distance(-origin_normal, tri_points[:,0], self.t_normals)
@@ -108,13 +111,13 @@ class InscribedCircleField:
 
         self.edge_d_start = -np.sum(self.tri_dirs * tri_points, axis=-1)
         self.edge_d_end = -np.sum(self.tri_dirs * np.roll(tri_points, -1, axis=1), axis=-1)
-        print("yo")
+
 # triangle = np.array([[0.2, 0.2, 0.1],[0.7, 0.2, 0.1],[0.2, 0.7, 0.1]])
 # normal = np.array([0,0,1])
-
+    # @jit
     def distance(self, xyz):
 
-        side = np.where(np.sum(self.t_normals*xyz, axis=-1) + self.t_ds >= 0 , 1, -1)
+        side = np.where(np.sum(self.t_normals*xyz, axis=-1) + self.t_ds >= 0 , 1.0, -1.0)
 
         inside_u = np.sum(self.p_tri_normals_0*xyz, axis=-1) < -self.p_tri_d_0
 
@@ -146,8 +149,8 @@ class InscribedCircleField:
         points = np.min(abs(point_distance(xyz, -self.origin_normal, self.tri_points)), axis=-1)
         d = np.where(on_plane_d, plane_d, np.where(on_edge_d, edge_d, points))
 
-        return min(u)# min(min(u), min(d))
-        # print("yo")
+        return min(min(u), min(d))# min(min(u), min(d))
+
         # if np.all(inside_u, axis=0):
         #     u = abs(np.dot(self.N_0, xyz) + self.D_0)
         # elif np.any((inside_u==False) & edge_greater_u & edge_less_u):
@@ -183,37 +186,76 @@ class InscribedCircleField:
 #         min_dist = min(min_dist, inscribed_triangles[i].distance(xyz))
 #     return min_dist
 
+
+def triangle_inscribed_circle_field(triangles, origin_normal):
+    """constructs an inscribed triangle density field
+
+    Args:
+        points (_type_): vertices of the triangle
+        origin_normal (_type_): normal of the plane utilizing the density field
+
+    Returns:
+        _type_: _description_
+    """
+    current = os.getcwd()
+    data_path = os.path.join(current, "src", "pebi_gmsh", "data", "constraint_array.npy")    
+
+    np.save(data_path, np.r_[origin_normal.flatten(), triangles.flatten()])
+
+    id = gmsh.model.mesh.field.add("ExternalProcess")
+    gmsh.model.mesh.field.set_string(id, "CommandLine", 
+                                    "python " + 
+                                    "src/pebi_gmsh/utils_3D/inscribed_circle_field.py " + 
+                                    ' ' + data_path)#os.path.join(current, "src", "pebi_gmsh", "utils_3D", "inscribed_circle_field.py"))
+    
+    #.join(map(str, np.vstack((origin_normal, vertices)).flatten()))
+    return id
+
 if __name__ == "__main__":
+    from time import time 
+    p_o = np.array([[0,1,2]])
+    n_o = np.array([[0,1,0]])
+    p_t = np.array([[[2,1,2]]])
+    n_t = np.array([[[1,0,0]]])
 
-    #point test
-    for i in range(100):
+    time_test = time()
+    for n in range(1000):
+        line_distance(p_o, n_o, p_t, n_t)
+    print(time()-time_test)
 
-        point = np.random.rand(3)
-        normal = np.random.rand(3)
-        normal = normal/np.sqrt(np.sum(normal**2))
+    time_test = time()
+    for n in range(1000):
+        line_distance(p_o, n_o, p_t, n_t)
+    print(time()-time_test)
+    # #point test
+    # for i in range(100):
 
-        target = np.random.rand(3)
+    #     point = np.random.rand(3)
+    #     normal = np.random.rand(3)
+    #     normal = normal/np.sqrt(np.sum(normal**2))
 
-        radius = point_distance(point, normal, target)
-        print("radius: {}, dist: {}".format(radius, np.sqrt(np.sum((point+normal*radius-target)**2))))
-        assert np.isclose(np.sqrt(np.sum((normal*radius)**2)), np.sqrt(np.sum((point+normal*radius-target)**2))), "radius: {}, dist: {}".format(radius, np.sqrt(np.sum((point+normal*radius-target)**2)))
+    #     target = np.random.rand(3)
 
-    # line test
-    for i in range(100):
-        # print(i)
-        point_o = np.random.rand(3)
-        point_t = np.random.rand(3)
+    #     radius = point_distance(point, normal, target)
+    #     print("radius: {}, dist: {}".format(radius, np.sqrt(np.sum((point+normal*radius-target)**2))))
+    #     assert np.isclose(np.sqrt(np.sum((normal*radius)**2)), np.sqrt(np.sum((point+normal*radius-target)**2))), "radius: {}, dist: {}".format(radius, np.sqrt(np.sum((point+normal*radius-target)**2)))
 
-        normal_o = np.random.rand(3)
-        normal_o = normal_o/np.sqrt(np.sum(normal_o**2))
+    # # line test
+    # for i in range(100):
+    #     # print(i)
+    #     point_o = np.random.rand(3)
+    #     point_t = np.random.rand(3)
 
-        normal_t = np.random.rand(3)
-        normal_t = normal_t/np.sqrt(np.sum(normal_t**2))
+    #     normal_o = np.random.rand(3)
+    #     normal_o = normal_o/np.sqrt(np.sum(normal_o**2))
 
-        radius = line_distance(point_o, normal_o, point_t, normal_t)
-        line_dist = line_distance_comp(point_o + radius*normal_o, point_t, normal_t)
-        print("radius: {}, dist: {}".format(radius, line_dist))
-        assert np.isclose(radius, line_dist) and radius >= 0
+    #     normal_t = np.random.rand(3)
+    #     normal_t = normal_t/np.sqrt(np.sum(normal_t**2))
+
+    #     radius = line_distance(point_o, normal_o, point_t, normal_t)
+    #     line_dist = line_distance_comp(point_o + radius*normal_o, point_t, normal_t)
+    #     print("radius: {}, dist: {}".format(radius, line_dist))
+    #     assert np.isclose(radius, line_dist) and radius >= 0
 
 
 

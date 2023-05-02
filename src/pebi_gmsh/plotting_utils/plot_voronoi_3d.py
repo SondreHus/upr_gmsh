@@ -1,6 +1,8 @@
 import numpy as np
 import plotly.figure_factory as ff
 from scipy.spatial import Voronoi
+import trimesh 
+
 def get_voronoi_edges(voronoi, points):
     edge_set = set()
     for j, ridge in enumerate(voronoi.ridge_vertices):
@@ -26,21 +28,29 @@ def inside_box(points, bounding_box, padding = 0):
 
 
 bounding_box = [0,1,0,1,0,1]
-def plot_voronoi_3d(voronoi: Voronoi, b_plane_normals, b_plane_d, padding = .2, sites = None):
+
+def inside_mesh(points, mesh_verts, mesh_faces):
+    mesh = trimesh.Trimesh(mesh_verts, faces=np.array(mesh_faces))
+    return mesh.contains(points)
+
+
+def plot_voronoi_3d(voronoi: Voronoi, mesh_verts, mesh_faces, padding = .2):# b_plane_normals, b_plane_d, padding = .2, sites = None):
    
     # edges = get_voronoi_edges(voronoi, points)
     vertices = voronoi.vertices
-    inside = np.ones(voronoi.points.shape[0], dtype=bool)
-    for i in range(b_plane_normals.shape[0]):
-        inside = np.logical_and(inside, np.sum(voronoi.points * b_plane_normals[i], axis=1) < -b_plane_d[i])        
+    inside = inside_mesh(vertices, mesh_verts, mesh_faces)
+    # inside = np.ones(voronoi.points.shape[0], dtype=bool)
+    # for i in range(b_plane_normals.shape[0]):
+    #     inside = np.logical_and(inside, np.sum(voronoi.points * b_plane_normals[i], axis=1) < -b_plane_d[i])        
     # accepted_sites = (voronoi.points[:,1] < 0.5) & inside_box(voronoi.points, bounding_box)
 
-    border_ridges = np.where(inside[voronoi.ridge_points[:,0]] != inside[voronoi.ridge_points[:,1]])[0]
+    # border_ridges = np.where(np.logical_and(inside[voronoi.ridge_points[:,0]], inside[voronoi.ridge_points[:,1]]))[0]
     tris = []
-    for ridge_id in border_ridges:
-        ridge = voronoi.ridge_vertices[ridge_id]
-        for i, j in zip(ridge[1:-1], ridge[2:]):
-            tris.append([ridge[0], i, j])
+    for ridge in voronoi.ridge_vertices:# range(voronoi.ridge_points.shape[0]):
+        # ridge = voronoi.ridge_vertices[ridge_id]
+        if np.all(inside[ridge]):
+            for i, j in zip(ridge[1:-1], ridge[2:]):
+                tris.append([ridge[0], i, j])
     
     tris = np.array(tris)
     
@@ -59,6 +69,7 @@ def plot_voronoi_3d(voronoi: Voronoi, b_plane_normals, b_plane_d, padding = .2, 
         "yaxis": {"range": [bounding_box[2] - padding, bounding_box[3] + padding]},
         "zaxis": {"range": [bounding_box[4] - padding, bounding_box[5] + padding]},
     })
+    fig.layout.scene.camera.projection.type = "orthographic"
     fig.show()
 
     # ax.scatter(vertices[:,0], vertices[:,1], vertices[:,2])
