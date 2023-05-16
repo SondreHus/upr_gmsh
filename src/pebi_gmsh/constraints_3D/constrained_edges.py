@@ -1,11 +1,26 @@
 import numpy as np
 from pebi_gmsh.utils_3D.densityfield import InscribedCircleField, triangle_inscribed_circle_field
-from pebi_gmsh.utils_3D.sphere_intersection import flatten_planar_centers
+from pebi_gmsh.utils_3D.sphere_intersection import flatten_planar_centers, sphere_intersections
 from pebi_gmsh.utils_2D.circle_intersections import circle_intersections
 import gmsh
 
 import plotly.graph_objects as go
     
+# Coefficient from x -> y
+# I: Inscribed circle radius
+# R: Ideal vertex radius
+# D: Edge distance of cell triangle
+# C: Radius of the intersection between the two spheres on opposing side of an edge
+# F: Density field cell size
+I_R_COEFF = np.sqrt(5)/3
+I_D_COEFF = 2/np.sqrt(3)
+I_H_COEFF = 1/3
+I_C_COEFF = 0.5*np.sqrt(2)/3
+I_F_COEFF = I_D_COEFF
+
+R_D_COEFF = I_D_COEFF/I_R_COEFF
+H_D_COEFF = I_D_COEFF/I_H_COEFF
+R_C_COEFF = I_C_COEFF/I_R_COEFF
 
 
 def get_filled_points(border_coords, normal, constraint_triangles, max_size = 0.1):
@@ -15,17 +30,17 @@ def get_filled_points(border_coords, normal, constraint_triangles, max_size = 0.
     gmsh.model.add("face_filler")
     
     # Set parameters which removes default mesh size
-    gmsh.option.setNumber("Mesh.Algorithm", 5)
+    # gmsh.option.setNumber("Mesh.Algorithm", 5)
     gmsh.option.setNumber("Mesh.MeshSizeExtendFromBoundary", 0)
     gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
     gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
 
     # Sets up the inscribed circle size field
-    density_field = triangle_inscribed_circle_field(constraint_triangles, normal)
+    density_field = triangle_inscribed_circle_field(constraint_triangles, normal, I_F_COEFF)
     clamp_field = gmsh.model.mesh.field.add("MathEval")
     
     # Sets up a constant size minimum
-    gmsh.model.mesh.field.set_string(clamp_field, "F", str(max_size * 2**0.5))
+    gmsh.model.mesh.field.set_string(clamp_field, "F", str(max_size * I_F_COEFF))
     min_field = gmsh.model.mesh.field.add("Min")
     gmsh.model.mesh.field.set_numbers(min_field, "FieldsList", [density_field, clamp_field])
     
@@ -100,6 +115,8 @@ class ConstrainedEdgeCollection:
 
         self.radius_constricted = np.zeros(0, dtype=bool)
 
+        self.inner_loops = []
+
     def set_max_size(self, max_size):
         self.max_size = max_size
 
@@ -158,6 +175,7 @@ class ConstrainedEdgeCollection:
         self.face_edges.append(edge_idx)
         self.face_edge_dirs.append(forward_oriented)
         self.face_corners.append(face_verts)
+        self.inner_loops.append(None)
         return len(self.face_edges)-1
 
     def populate_edge_vertices(self):
@@ -241,7 +259,7 @@ class ConstrainedEdgeCollection:
         
         flattened_dirs = np.roll(flattened_verts, -1, axis=0) - flattened_verts
         flattened_dirs = flattened_dirs/np.sqrt(np.sum(flattened_dirs**2, axis=1))[:, None]
-        flattened_dirs = flattened_dirs@np.array([[0,1, 0], [-1, 0, 0], [0, 0, 1]])
+        flattened_dirs = flattened_dirs@np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
 
         # The true main triangle vertices can be arbitrarily close to these vertices in accordance with their target radii
         _, main_triangle_minimums = circle_intersections(
@@ -257,14 +275,14 @@ class ConstrainedEdgeCollection:
             # Check if this is correct
             inscribed_radius = min(density_field.distance(t_m @ invertion.T + origo), self.max_size)
             # main_triangle_verts[i] = main_triangle_minimums[i] + flattened_dirs[i] * inscribed_radius * 2 * np.sqrt(2/3)
-            main_triangle_radii[i] = inscribed_radius
+            main_triangle_radii[i] = inscribed_radius * I_R_COEFF
             #for i in range(len(edge)-1):
         
         _ , main_triangle_verts = circle_intersections(
             flattened_verts[:,:2], 
             np.roll(flattened_verts[:,:2], -1, axis=0), 
-            self.vertex_radii[loop_vert_ids] + main_triangle_radii*0.6,
-            self.vertex_radii[np.roll(loop_vert_ids, -1)] + main_triangle_radii*0.6
+            self.vertex_radii[loop_vert_ids] + main_triangle_radii * R_C_COEFF,
+            self.vertex_radii[np.roll(loop_vert_ids, -1)] + main_triangle_radii * R_C_COEFF
         )
         main_triangle_verts = np.pad(main_triangle_verts, ((0,0),(0,1)))
 
@@ -294,17 +312,19 @@ class ConstrainedEdgeCollection:
 
             sample_verts = corner + np.array([np.cos(sample_angles), np.sin(sample_angles), np.zeros(sample_angles.shape)]).T * (r + avg_main_radii)
 
-            sample_radii = np.minimum(np.array([density_field.distance(sample_vert) for sample_vert in (sample_verts@invertion.T + origo)]), self.max_size)
+            sample_radii = np.minimum(np.array([density_field.distance(sample_vert) for sample_vert in (sample_verts@invertion.T + origo)]), self.max_size) * I_R_COEFF 
 
-            inverts = np.r_[0.5*main_triangle_radii[i-1]**-1, sample_radii**-1, 0.5*main_triangle_radii[i]**-1] 
+            # Sample-wise 1/d
+            inverts = np.r_[0.5*main_triangle_radii[i-1]**-1, sample_radii**-1, 0.5*main_triangle_radii[i]**-1] / R_D_COEFF 
 
-            steps = int(np.ceil(r*abs(angle_diff)*np.sqrt(3/2)*np.sum(inverts)/(inverts.shape[0]-1)))
+            steps = int(np.ceil(r*abs(angle_diff) * np.sum(inverts)/(inverts.shape[0]-1)))+1
 
             # steps = int(np.ceil(r*abs(angle_diff)/(np.sqrt(8/3)*avg_main_radii)))
 
             angles = np.linspace(angle_from, angle_from + angle_diff, steps,  endpoint=False)[1:]
 
-            fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * (r + avg_main_radii*0.6) 
+            fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * (r + avg_main_radii * R_C_COEFF) 
+            
             # last_radius = main_triangle_radii[i-1]
             # current_angle_diff = 0
             # potential_angle = current_angle_diff + last_radius*np.sqrt(8/3)/r
@@ -313,14 +333,14 @@ class ConstrainedEdgeCollection:
             if len(angles) > 0:
                 # pressure = True
                 # while pressure:
-                for _ in range(10):
-                    radii = np.minimum(np.array([density_field.distance(fan_vert) for fan_vert in (fan_verts@invertion.T + origo)]), self.max_size)
+                for _ in range(20):
+                    radii = np.minimum(np.array([density_field.distance(fan_vert) for fan_vert in (fan_verts@invertion.T + origo)]), self.max_size) * I_R_COEFF
                     dists = np.sqrt(np.sum((np.vstack((fan_verts, main_triangle_verts[i])) - np.vstack((main_triangle_verts[i-1], fan_verts)))**2, axis=1))
                     mean_radii = (np.r_[main_triangle_radii[i-1], radii] + np.r_[radii, main_triangle_radii[i]])
-                    forces = 1 - (dists/(mean_radii*np.sqrt(8/3)))
+                    forces = 1 - (dists/(mean_radii * R_D_COEFF))
                     force_diffs = forces[1:] - forces[:-1]
-                    angles += force_diffs*0.2
-                    fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * (r + radii*0.6)[:,None]
+                    angles += force_diffs*0.1
+                    fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * (r + radii * R_C_COEFF)[:,None]
                     # if sum(forces) > 0:
                     #     steps -= 1
                     #     angles = np.linspace(angle_from, angle_from + angle_diff, steps,  endpoint=False)[1:]
@@ -328,10 +348,11 @@ class ConstrainedEdgeCollection:
                     # else:
                     #     pressure = False
             
-            
                 fan_vert_ids = self.add_vertices(fan_verts@invertion.T + origo)
                 
                 inner_loop_vert_ids = inner_loop_vert_ids + fan_vert_ids.tolist()
+                
+                start_triangle_length = self.triangles.shape[0]
 
                 self.triangles = np.vstack((self.triangles, [loop_vert_ids[i], fan_vert_ids[0], main_triangle_vert_ids[i-1]]))
 
@@ -339,25 +360,45 @@ class ConstrainedEdgeCollection:
                     self.triangles = np.vstack((self.triangles, [loop_vert_ids[i], fan_vert_ids[j], fan_vert_ids[j-1]]))
 
                 self.triangles = np.vstack((self.triangles, [loop_vert_ids[i], main_triangle_vert_ids[i], fan_vert_ids[-1]]))
-                self.vertex_radii[fan_vert_ids] = avg_main_radii
+                
+                self.vertex_radii[fan_vert_ids] = radii 
+                new_triangles = self.triangles[start_triangle_length:]
+                test = sphere_intersections(self.vertex_coords[new_triangles], self.vertex_radii[new_triangles])
             else:
                 self.triangles = np.vstack((self.triangles, [loop_vert_ids[i], main_triangle_vert_ids[i], main_triangle_vert_ids[i-1]]))
             # steps = (np.sqrt(np.sum(dir_0**2)) + np.sqrt(np.sum(dir_1**2))/2) 
                 
         inner_loop_vert_ids = np.array(inner_loop_vert_ids)
 
-        # return
-        
-        all_inner_vertices, all_inner_triangles = get_filled_points(self.vertex_coords[inner_loop_vert_ids], face_normal, constraint_triangles, self.max_size)
-        new_vertices = all_inner_vertices[inner_loop_vert_ids.shape[0]:]
-        
-        new_vertex_ids = self.add_vertices(new_vertices, constrained_radius=False)
-        all_inner_triangles = all_inner_triangles.reshape(-1,3) - 1 # Gmsh starts indexing at 1
-        inner_vertex_ids = np.r_[inner_loop_vert_ids, new_vertex_ids]
 
-        new_triangles = inner_vertex_ids[all_inner_triangles]
+        # return inner_loop_vert_ids
+        self.inner_loops[face_id] = inner_loop_vert_ids
+        return
+        
+    def fill_inner_loops(self):
+        for i, loop in enumerate(self.inner_loops):
+            if loop is None:
+                continue
 
-        self.triangles = np.vstack((self.triangles, new_triangles))
+            constraint_triangles = self.get_constraint_trignales(i)
+            density_field = InscribedCircleField(self.face_normals[i], constraint_triangles)
+
+            constraint_triangles = self.get_constraint_trignales(i)
+            all_inner_vertices, all_inner_triangles = get_filled_points(self.vertex_coords[loop], self.face_normals[i], constraint_triangles, self.max_size)
+            new_vertices = all_inner_vertices[loop.shape[0]:]
+            
+            new_vertex_ids = self.add_vertices(new_vertices, constrained_radius=False)
+            # These coefficients should be wrong
+            new_vertex_radii = np.minimum(np.array([density_field.distance(vert) for vert in new_vertices]), self.max_size) * I_R_COEFF
+    
+            self.vertex_radii[new_vertex_ids] = new_vertex_radii
+            
+            all_inner_triangles = all_inner_triangles.reshape(-1,3) - 1 # Gmsh starts indexing at 1
+            inner_vertex_ids = np.r_[loop, new_vertex_ids]
+
+            new_triangles = inner_vertex_ids[all_inner_triangles]
+
+            self.triangles = np.vstack((self.triangles, new_triangles))
 
 
 

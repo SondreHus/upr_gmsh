@@ -5,8 +5,8 @@ import numpy as np
 from pebi_gmsh.utils_3D.densityfield import InscribedCircleField
 
 
-    
-data_path = sys.argv[1]
+field_coeff = float(sys.argv[1])
+data_path = sys.argv[2]
 data = np.load(data_path)
 normal = data[:3]
 tris = data[3:].reshape(-1,3,3)
@@ -24,7 +24,7 @@ while(True):
     #         f.write("program run {} times\n".format(i))
     if math.isnan(xyz[0]):
         break
-    f = field.distance(xyz) * 2 ** 0.5
+    f = field.distance(xyz) * field_coeff
     sys.stdout.buffer.write(struct.pack("d",f))
     sys.stdout.flush()
     i += 1

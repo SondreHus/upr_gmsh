@@ -1,7 +1,7 @@
 from plotly import figure_factory as ff
 import numpy as np
 import matplotlib.pyplot as plt
-
+from scipy.spatial import voronoi_plot_2d, Voronoi
 points = np.array([
     [0.90383448, 0.0841829 ],
     [0.42717591, 0.43612741],
@@ -15,7 +15,7 @@ points = np.array([
     [0.55420788, 0.11353278]
 ])
 
-def plot_metric(m,n, metric = lambda x,y, xt, yt: np.sqrt(np.square(x-xt) + np.square(y-yt)), tol = 1e-2, name = "Voronoi"):
+def plot_metric(m,n, metric = lambda x,y, xt, yt: np.sqrt(np.square(x-xt) + np.square(y-yt)), tol = 1e-2, name = "Voronoi", scale = 500):
     grid = np.zeros((points.shape[0],m,n))
     grid_2 = np.zeros((m,n))
     grid_3 = np.zeros((m,n))
@@ -23,8 +23,8 @@ def plot_metric(m,n, metric = lambda x,y, xt, yt: np.sqrt(np.square(x-xt) + np.s
         for y in range(n):
             dist = np.inf
             border = False
-            for i, point in enumerate(points):
-                val = metric((x+0.5)/m, (y+0.5)/n, point[0], point[1])
+            for i, point in enumerate(points*np.array([m,n])):
+                val = metric((x+0.5), (y+0.5), point[0], point[1])
                 if val < dist:
                     grid_3[x,y] = i
                     if dist - val < tol:
@@ -37,23 +37,27 @@ def plot_metric(m,n, metric = lambda x,y, xt, yt: np.sqrt(np.square(x-xt) + np.s
                 grid_2[x,y] = 1
     
     plt.imshow(grid_3)
-    plt.show()
+    plt.savefig(name + "borders.png")
     plt.imshow(np.min(grid, axis=0))
     plt.savefig(name + "dist.png")
-    plt.imshow(grid_2)
-    plt.savefig(name + "borders.png")
+    # plt.imshow(grid_2)
+    # plt.show()
       
-plot_metric(300,300, name="euclidean")
-plot_metric(300,300, lambda x,y, xt, yt: (np.square(x-xt) + np.square(y-yt)), name="euclidean")
-plot_metric(300,300, lambda x,y, xt, yt: np.abs(x-xt) + np.abs(y-yt), name="taxicab")
-plot_metric(300,300, lambda x,y, xt, yt: max(np.abs(x-xt),np.abs(y-yt)), name="max")
+# plot_metric(500,700, name="euclidean")
+# plot_metric(500,700, lambda x,y, xt, yt: (np.square(x-xt) + np.square(y-yt)), name="euclidean")
+# plot_metric(500,700, lambda x,y, xt, yt: np.abs(x-xt) + np.abs(y-yt), name="taxicab")
+# plot_metric(500,700, lambda x,y, xt, yt: max(np.abs(x-xt),np.abs(y-yt)), name="max")
 
 
 fig, ax = plt.subplots()
-ax.scatter(points[:,0], points[:,1])
-ax.set_xlim((0,1))
+ax.scatter(points[:,1]*1.4, 1-points[:,0])
+ax.set_xlim((0,1.4))
 ax.set_ylim((0,1))
-ax.set_aspect("equal", "box")
+# ax.set_aspect("equal", "box")
 fig.tight_layout()
 plt.savefig("points.png")
 print("hi")
+
+vor = Voronoi(points@np.array([[0, -1],[1.4,0]]))
+voronoi_plot_2d(vor)
+plt.show()

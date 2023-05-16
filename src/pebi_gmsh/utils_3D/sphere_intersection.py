@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 def flatten_sphere_centers(centers: np.ndarray):
     """Converts a set of 3d point triplets into sets where the first point is at origo, the second is at x=0,
     all three are at z=0 and the orientation of the triangle normal is [0,0,1].
-    Additionally returns the necesssary angles and offsets to revert this change.
+    Additionally returns the necesssary rotation matrices and offsets to revert this change.
 
     Args:
         centers (np.ndarray): _description_
@@ -36,9 +36,16 @@ def flatten_sphere_centers(centers: np.ndarray):
         [-v[:, 1], v[:, 0], z]]
     ), 2, 0)
     
-    k = np.where(np.isclose(s, 0), 1, ((1 - c) / (s ** 2))).reshape(-1,1,1)
+    k = np.divide((1 - c), (s ** 2), where = (np.isclose(s, 0)==False) , out = np.ones((s.shape))).reshape(-1,1,1)
 
     rotation_matrix = (np.eye(3) + kmat + kmat@kmat * k)
+    
+    # Resolving the cases where the face vector is either [0,0,1] or [0,0,-1]
+    flip_matrix = np.tile(np.diag([1,-1,-1]),(s.shape[0], 1, 1))
+    eye_matrix = np.tile(np.eye(3),(s.shape[0], 1, 1))
+    singelton_matrix = np.where((a[:,2]>0).reshape(-1,1,1), eye_matrix, flip_matrix)    
+
+    rotation_matrix = np.where(np.isclose(s,0).reshape(-1,1,1), singelton_matrix, rotation_matrix)
 
     kmat_inv = np.swapaxes(np.array([
         [z, v[:, 2], -v[:, 1]], 
@@ -47,6 +54,7 @@ def flatten_sphere_centers(centers: np.ndarray):
     ), 2, 0)
 
     rotation_matrix_inv = (np.eye(3) + kmat_inv + kmat_inv@kmat_inv * k)
+    rotation_matrix_inv = np.where(np.isclose(s,0).reshape(-1,1,1), singelton_matrix, rotation_matrix_inv)
 
     flattened_centers =  flattened_centers @ rotation_matrix
 
@@ -108,6 +116,13 @@ def sphere_intersections(centers, radii):
     """
     plane_centers, offset, rotation = flatten_sphere_centers(centers)
 
+    # assert np.all(np.isclose(plane_centers[:,:,2], 0))
+
+    # assert np.all(np.isclose(plane_centers[:,0,:], 0))
+
+    # assert np.all(np.isclose(plane_centers[:,1,1], 0))
+
+
     d = plane_centers[:, 1, 0]
 
     i = plane_centers[:,2,0]
@@ -132,7 +147,7 @@ def flatten_planar_centers(centers, normal):
     up = np.array([0,0,1])
 
     if np.all(np.isclose(normal, -up)):
-        matrix = np.diag([-1,1,1])
+        matrix = np.diag([1,-1,-1])
         return centers@matrix.T, matrix, origo
 
     v = np.cross(normal, up)

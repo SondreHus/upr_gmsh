@@ -6,27 +6,22 @@ import numpy as np
 
 from pebi_gmsh.constraints_3D.constrained_edges import ConstrainedEdgeCollection
 from pebi_gmsh.constraints_3D.triangulated_surface import TriangulatedSurface
-from pebi_gmsh.plotting_utils.plot_voronoi_3d import plot_voronoi_3d, inside_mesh
+from pebi_gmsh.plotting_utils.plot_voronoi_3d import plot_voronoi_3d, inside_mesh, plot_trimesh, plot_3d_points
 
 
-def plot_3d_points(points):
+# # Triangle over plane test
 
-    trace = go.Scatter3d(
-            x = points[:,0], y = points[:,1], z = points[:,2], mode = 'markers', marker = dict(
-            size = 2,
-            color = points[:,2], # set color to an array/list of desired values
-            colorscale = 'Viridis'
-            )
-    )
+# base = np.array([
+#     [0,0,0],
+#     [0,1,0],
+#     [1,1,0],
+#     [1,0,0],
+#     [0.5, 0.7, 0.2],
+#     [0.5, 0.4, 0.2],
+#     [0.5, 0.7, 0.75]
+# ])
 
-
-    layout = go.Layout(title = '3D Scatter plot')
-    fig = go.Figure(data = [trace], layout = layout)
-    fig.layout.scene.camera.projection.type = "orthographic"
-    fig.show()
-
-
-
+# plot_trimesh(base, np.array([[0,1,2], [0,2,3], [4,5,6]]))
 
 CEC = ConstrainedEdgeCollection()
 CEC.set_max_size(0.1)
@@ -84,20 +79,25 @@ for id in cross_faces:
 # CEC.construct_face_padding(2)
 # CEC.construct_face_padding(0)
 # CEC.construct_face_padding(1)
-# plot_3d_points(CEC.vertex_coords)
 
 
+plot_3d_points(CEC.vertex_coords, color = np.arange(CEC.vertex_coords.shape[0]))
+CEC.fill_inner_loops()
+# plot_trimesh(CEC.vertex_coords, CEC.triangles, intensity = CEC.vertex_radii)
 
-fig = ff.create_trisurf(x=CEC.vertex_coords[:,0], y=CEC.vertex_coords[:,1], z=CEC.vertex_coords[:,2],
-                        simplices=CEC.triangles,
-                        title="Target tri-mesh", aspectratio=dict(x=1, y=1, z=1))
-fig.show()
+# fig = ff.create_trisurf(x=CEC.vertex_coords[:,0], y=CEC.vertex_coords[:,1], z=CEC.vertex_coords[:,2],
+#                         simplices=CEC.triangles,
+#                         title="Target tri-mesh", aspectratio=dict(x=1, y=1, z=1))
+# fig.show()
 
 
+plot_trimesh(CEC.vertex_coords, CEC.triangles, intensity = np.ones(CEC.vertex_coords.shape[0]))#CEC.vertex_radii)
 tri_surf = TriangulatedSurface(CEC.vertex_coords, CEC.triangles, CEC.vertex_radii, CEC.radius_constricted)
 
-outer, inner, _ = tri_surf.generate_voronoi_sites()
 
+
+outer, inner, _ = tri_surf.generate_voronoi_sites()
+print("GOT THROUGH IT")
 sites = np.vstack((outer, inner))
 sites = sites[~np.any(np.isnan(sites), axis=1),:]
 voronoi = Voronoi(sites)
@@ -108,7 +108,7 @@ vertices = voronoi.vertices
 inside = inside_mesh(vertices, mesh_points, CEC.face_corners)
 vertices = vertices[inside]
 
-plot_3d_points(np.vstack((outer,inner)))
+plot_3d_points(sites)
 plot_3d_points(vertices)
 
 plot_voronoi_3d(voronoi, mesh_points, CEC.face_corners)
