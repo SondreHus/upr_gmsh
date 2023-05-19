@@ -7,8 +7,57 @@ import os
 import gmsh
 # Here we lay out the "Inscribed circle distances"
 
+
+def line_plane_distance(point, line_dir, plane_normal, plane_d):
+
+    # TODO: Make sure point is on right side of plane
+    
+
+    inscribed_circle_dir = np.cross(line_dir, np.cross(line_dir, plane_normal))
+    inscribed_circle_dir = inscribed_circle_dir/np.sqrt(np.sum(inscribed_circle_dir**2, axis=1))
+
+    return (np.sum(point * plane_normal, axis=1) + plane_d)/(1-np.sum(inscribed_circle_dir*plane_normal, axis=1))
+
+
+
+def line_pair_center(p0, v0, p1, v1):
+
+    if np.all(np.isclose(v0,v1)):
+        return (p0 + p1)/2
+    
+    v2 = np.cross(v0, v1)
+    a = np.vstack((v0,-v1,v2)).T
+    t0, t1, _ = np.linalg.solve(a, p1-p0)
+    
+    return (p0 + v0*t0 + p1 + v1*t1)/2
+
+def line_line_distance(origin_point, origin_line_dir, target_point, target_line_dir):
+    
+    # Smallest inscribes sphere is always on the more acute angle
+    sign = np.sign(np.dot(origin_line_dir, target_line_dir))
+
+    center = line_pair_center(origin_point, origin_line_dir, target_point, target_line_dir)
+    
+    plane_normal = np.cross(sign*target_line_dir + origin_line_dir, origin_point-center)
+    plane_normal = plane_normal/np.sqrt(np.sum(plane_normal**2, axis=-1))
+    
+    sphere_dir = np.cross(origin_line_dir, plane_normal)
+    sphere_dir = sphere_dir/np.sqrt(np.sum(sphere_dir**2, axis=-1))
+    
+    return line_distance(origin_point, sphere_dir.reshape(-1,3), target_point.reshape(-1,1,3), sign*target_line_dir.reshape(-1,1,3)), sphere_dir
+
+
+
+def line_point_distance(origin_point, origin_line_dir, target_point):
+    
+    d = np.dot(origin_line_dir, target_point-origin_point)
+    h = np.linalg.norm(target_point-origin_point - np.sum((origin_point-target_point)*origin_line_dir,axis=-1)*origin_line_dir)
+    return (d**2 + h**2)/(2*h)
+
+
+
 @jit(cache=True)
-def planar_distance(origin_normal: np.ndarray, target_point: np.ndarray, target_normal: np.ndarray, tol = 1e-5):
+def plane_plane_distance(origin_normal: np.ndarray, target_point: np.ndarray, target_normal: np.ndarray, tol = 1e-5):
     
     factor = 1 - np.sum((origin_normal*target_normal), axis=-1)
 
@@ -22,7 +71,7 @@ def planar_distance(origin_normal: np.ndarray, target_point: np.ndarray, target_
     target_normal = np.where(np.repeat(factor > tol, 3).reshape(-1,3), target_normal, np.zeros(target_normal.shape))
     return D_t, target_normal
 
-@jit(cache=True)
+# @jit(cache=True)
 def line_distance(p_o: np.ndarray, n_o: np.ndarray, p_t: np.ndarray, n_t: np.ndarray, tol = 1e-5):
     a = np.expand_dims(n_o, 1)- np.expand_dims(np.sum(np.expand_dims(n_o, 1)*n_t, axis=-1), 2) * n_t
     b = (p_o - p_t) - np.expand_dims(np.sum((p_o - p_t)*n_t, axis=-1), 2)*n_t
@@ -89,8 +138,8 @@ class InscribedCircleField:
 
         # Linear inscribed distance formula between the planes ends up being a linear formula f(xyz) = N*xyz + D
         # The formula varies based on the sign of the origin, since is assumes the inscribed sphere has its center in the positive origin normal direction
-        self.D_0, self.N_0 = planar_distance(origin_normal, tri_points[:, 0], self.t_normals)
-        self.D_1, self.N_1 = planar_distance(-origin_normal, tri_points[:, 0], self.t_normals)
+        self.D_0, self.N_0 = plane_plane_distance(origin_normal, tri_points[:, 0], self.t_normals)
+        self.D_1, self.N_1 = plane_plane_distance(-origin_normal, tri_points[:, 0], self.t_normals)
         
         # Vectors along the edge directions of the triangle
 
@@ -216,26 +265,45 @@ def triangle_inscribed_circle_field(triangles, origin_normal, field_coeff = 2):
 
 if __name__ == "__main__":
     from time import time 
-    p_o = np.random.rand(1000,3)
-    n_o = np.array([[0,1,0]])
-    p_t = np.array([[[2,1,2]]])
-    n_t = np.array([[[1,0,0]]])
+    
+    
+    p0 = np.array([0,0,0])
+    n0 = np.array([1,0,0])
 
-    time_test = time()
-    for p in p_o:
-        line_distance(p, n_o, p_t, n_t)
-    print(time()-time_test)
+    angles = np.linspace(0,np.pi*2, 100)
+    all_dirs = np.vstack((np.zeros(100), np.sin(angles), np.cos(angles))).T
+    for i in range(10):
+        p1 = np.random.rand(3)*2-1
+        n1 = np.random.rand(3)*2-1
+        n1 = n1/np.linalg.norm(n1)
 
-    time_test = time()
-    for p in p_o:
-        line_distance(p, n_o, p_t, n_t)
-    print(time()-time_test)
+        dist1, sdir1 = line_line_distance(p0, n0, p1, n1)
+        dist2, sdir2 = line_line_distance(p0, n0, p1, n1)
+        # print(sdir1)
+        print(min(dist1, dist2))
 
-    planar_distance(
-        np.array([0,1,0]),
-        np.array([[1,1,1]]),
-        np.array([[1,1,2]])
-    )
+        min_dist = np.min(np.abs([line_distance(p0, test_dir.reshape(-1,3), p1.reshape(-1,1,3), n1.reshape(-1,1,3)) for test_dir in all_dirs]))
+        print(min_dist)
+    # p_o = np.random.rand(1000,3)
+    # n_o = np.array([[0,1,0]])
+    # p_t = np.array([[[2,1,2]]])
+    # n_t = np.array([[[1,0,0]]])
+
+    # time_test = time()
+    # for p in p_o:
+    #     line_distance(p, n_o, p_t, n_t)
+    # print(time()-time_test)
+
+    # time_test = time()
+    # for p in p_o:
+    #     line_distance(p, n_o, p_t, n_t)
+    # print(time()-time_test)
+
+    # plane_plane_distance(
+    #     np.array([0,1,0]),
+    #     np.array([[1,1,1]]),
+    #     np.array([[1,1,2]])
+    # )
 
     # #point test
     # for i in range(100):

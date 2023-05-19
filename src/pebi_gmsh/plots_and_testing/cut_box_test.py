@@ -108,9 +108,11 @@ vertices = voronoi.vertices
 inside = inside_mesh(vertices, mesh_points, CEC.face_corners)
 vertices = vertices[inside]
 
-plot_3d_points(sites)
-plot_3d_points(vertices)
+# plot_3d_points(sites)
+# plot_3d_points(vertices)
 
-plot_voronoi_3d(voronoi, mesh_points, CEC.face_corners)
+
+data = plot_3d_points(sites, return_data = True)
+plot_voronoi_3d(voronoi, mesh_points, CEC.face_corners, data=data)
 
 

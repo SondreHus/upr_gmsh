@@ -76,16 +76,12 @@ class TriangulatedSurface:
         self.vert_tris = [np.array(v) for v in self.vert_tris]
         
         # Naive vertex radii
-        current_radius = np.zeros(vertices.shape[0])
-        # edge_num = np.zeros(vertices.shape[0])
+        # current_radius = np.zeros(vertices.shape[0])
+        current_radius = self.vertex_radii
 
         flattened_triangles, *_ = flatten_sphere_centers(vertices[triangles])
 
-        # _, tri_distances = circumcircle(flattened_triangles[:,0, :-1], flattened_triangles[:,1, :-1], flattened_triangles[:,2, :-1])
-
-        # for comp_vertex_id, distance in enumerate(tri_distances):
-        #     current_radius[triangles[comp_vertex_id]] = np.where(current_radius[triangles[comp_vertex_id]] > distance , current_radius[triangles[comp_vertex_id]], distance)
-
+      
         # Maximum approach
 
         edge_dists = np.sqrt(np.sum((self.vert_coords[self.edges[:,0]] - self.vert_coords[self.edges[:,1]])**2, axis=-1))
@@ -93,35 +89,15 @@ class TriangulatedSurface:
         for i, edge in enumerate(self.edges):
             current_radius[edge[0]] = max(current_radius[edge[0]], edge_dists[i])
             current_radius[edge[1]] = max(current_radius[edge[1]], edge_dists[i])
+        #np.where(constricted_radii, self.vertex_radii, current_radius)
 
-        # edge_dists = np.sqrt(np.sum((self.vert_coords[self.edges[:,0]] - self.vert_coords[self.edges[:,1]])**2, axis=-1))
-       
-        # for i, edge in enumerate(self.edges):
-        #     current_radius[edge[0]] += edge_dists[i]
-        #     current_radius[edge[1]] += edge_dists[i]
-
-        # current_radius /= np.array([tris.shape[0] for tris in self.vert_tris])
-
-        # current_radius = current_radius * np.sqrt(5/3)/2
-        current_radius = self.vertex_radii#np.where(constricted_radii, self.vertex_radii, current_radius)
         
         # # Calculate minimum radius for each vertex
 
         min_radius = np.zeros(vertices.shape[0])
 
         for comp_vertex_id, tri in enumerate(triangles):
-            # comp = np.array([[1,2],[2,0],[0,1]])
             
-            # _, inner = circle_intersections(
-            #     flattened_triangles[comp_vertex_id, comp[:,0], :-1], 
-            #     flattened_triangles[comp_vertex_id, comp[:,1], :-1], 
-            #     current_radius[tri[comp][:,0]], 
-            #     current_radius[tri[comp][:,1]]
-            # )
-
-            # dists = np.sqrt(np.sum((inner - flattened_triangles[comp_vertex_id, :, :-1])**2, axis=1))
-            
-            #print("Last tri: {}".format(tri))
             try:
                 dists = minimum_intersecting_radii(flattened_triangles[comp_vertex_id], current_radius[tri])
                 min_radius[tri] = np.where(min_radius[tri] > dists , min_radius[tri], dists)
@@ -138,22 +114,11 @@ class TriangulatedSurface:
 
         diff = (current_radius - min_radius)
         comparrison_order = np.argsort(diff)
-        
-
-        # Problemet, reduksjon av en enkelt vertex sin radius er ikke tilstrekkelig
-        # videre reduksjon krever at den "andre siten" blir flyttet vekk
-        # Det er 3 spherer som er ansvarlige for denne siten
-        # Kompromisset?
-        # Prøv å holde alle spherer så store (Taxicab) som mulig
-        # Steg 1: reduser alle radiusene til en faktor av deres (orginale?) diff
-        # Steg 2: repeter fram til de ikke intersecter
-        # Steg 3: Oppdater min dist og diff slik at meshet fortsatt er sammenkoblet
-
-        # assert np.all(current_radius > min_radius)
-        # # Må gjøre dette for alle overlappende sites
+        print("Diff {}".format(diff[comparrison_order]))
         for comp_vertex_id in comparrison_order:
             site_dists = np.sqrt(np.sum((np.vstack((outer, inner)) - vertices[comp_vertex_id])**2, axis=1))
-
+            
+            # id of site
             closest_site_id = np.nanargmin(site_dists)
             closest_site_coords = np.vstack((outer, inner))[closest_site_id]
             closest_site_triangle = closest_site_id % self.tri_verts.shape[0]
@@ -164,86 +129,14 @@ class TriangulatedSurface:
                 if closest_site_dist < min_radius[comp_vertex_id]:
                     print("Problem with vertex id {} and site {}".format(comp_vertex_id, closest_site_id))
                     print("constricted: {} - {}".format(comp_vertex_id, self.constricted_radii[comp_vertex_id]))
+                    print("site tri vert ids: {}".format(self.tri_verts[closest_site_triangle]))
+                    print("site tri vert constricted: {} \n".format(self.constricted_radii[self.tri_verts[closest_site_triangle]]))
                 else:
                     current_radius[comp_vertex_id] = (closest_site_dist + min_radius[comp_vertex_id])/2
-        
+                
         
         self.vertex_radii = current_radius
-        #         tri_flat, c0, inverse = flatten_sphere_centers(tri_vert_coords) 
-                
-        #         center, _ = circumcircle(tri_flat[:,0,:2], tri_flat[:,1,:2], tri_flat[:,2,:2])
-        #         center = np.pad(center, ((0,0),(0,1))) @ inverse + c0
-                
-        #         tri_dir = center - closest_site_coords
-                
-        #         dists = line_sphere_intersection(tri_vert_coords, min_radius[self.tri_verts[closest_site_triangle]], np.tile(closest_site_coords, (3,1)), np.tile(tri_dir, (3,1)))[0]
-                
-        #         max_tri_dist = np.nanmin(dists)
-        #         if not np.isnan(max_tri_dist):
-        #             tri_dir = tri_dir * max_tri_dist
-                
-        #         a, _ = sphere_line_reduction(self.vert_coords[comp_vertex_id], current_radius[comp_vertex_id], min_radius[comp_vertex_id], closest_site_coords, tri_dir)
-        #         assert a > 0 and a <= 1 
-        #         new_site = tri_dir * a + closest_site_coords
-
-        #         new_tri_radii = np.sqrt(np.sum((tri_vert_coords - new_site)**2, axis=-1))
-
-        #         current_radius[self.tri_verts[closest_site_triangle]] = new_tri_radii 
-        #         assert np.all(current_radius > min_radius)
-             
-        #         current_radius[comp_vertex_id] = current_radius[comp_vertex_id] - a * (current_radius[comp_vertex_id] - min_radius[comp_vertex_id])        
-        #         assert np.all(current_radius > min_radius)
-        #         # factors = 0.8 ** (np.arange(10) + 1)
-
-        #         # tri_radii = min_radius[closest_site_vertices] + factors.reshape(-1,1)*diff[closest_site_vertices]
-                
-        #         # outer, inner = sphere_intersections(np.tile(self.vertices[closest_site_vertices], (10,1,1)), tri_radii)
-        #         # dists = np.min((
-        #         #     np.sqrt(np.sum((outer - vertices[comp_vertex_id])**2, axis=1)),
-        #         #     np.sqrt(np.sum((inner - vertices[comp_vertex_id])**2, axis=1))
-        #         # ), axis=0)
-
-        #         # vertex_radii = min_radius[comp_vertex_id] + factors.reshape(-1,1) * diff[comp_vertex_id]
-
-        #         # factor_index = np.where(vertex_radii < dists)[0][0]
-
-        #         # factor = factors[factor_index]
-
-        #         # current_radius[closest_site_vertices] = min_radius[closest_site_vertices] + factors * diff[closest_site_vertices]
-        #         # current_radius[comp_vertex_id] = min_radius[comp_vertex_id] + factor*diff[comp_vertex_id]
-
-
-
-        #         # Update the minimum distance of all affected vertices
-                
-        #         affected_tris = reduce(
-        #             np.union1d, 
-        #             [self.vert_tris[site_vertex] for site_vertex in self.tri_verts[closest_site_triangle]] +\
-        #             [self.vert_tris[comp_vertex_id]]
-        #         )
-        #         assert np.all(current_radius > min_radius)
-        #         for tri in affected_tris:
-        #             print(tri)
-        #             dists = minimum_intersecting_radii(flattened_triangles[tri], current_radius[self.tri_verts[tri]])
-        #             min_radius[self.tri_verts[tri]] = np.where(min_radius[self.tri_verts[tri]] > dists , min_radius[self.tri_verts[tri]], dists)
-        #         assert np.all(current_radius > min_radius)
-        #         # Limit this to only the affected vertices
-
-        #         diff = current_radius - min_radius
-                
-        #         #closest_site_dist = min_radius[i]
-        #         #print("FUCK")
-        #     else:
-        #         current_radius[comp_vertex_id] = closest_site_dist
-        #         diff[comp_vertex_id] = current_radius[comp_vertex_id] - min_radius[comp_vertex_id]
-
-        #     tri_ids = self.vert_tris[comp_vertex_id]
-        #     tri_verts = self.tri_verts[tri_ids]
-        #     new_outer, new_inner = sphere_intersections(self.vert_coords[tri_verts], current_radius[tri_verts])
-
-        #     outer[tri_ids] = new_outer
-        #     inner[tri_ids] = new_inner
-        
+    
 
     def generate_voronoi_sites(self):
         

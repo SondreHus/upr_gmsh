@@ -44,6 +44,10 @@ def circle_intersections(p_0, p_1, r_0, r_1, accept_nan = False):
 
     return p_0 + x_0 + normals*y , p_0 + x_0 - normals*y
 
+
+def circle_intersection_height(r1, r2, d):
+    return np.sqrt(4*d**2*r1**2-(d**2-r2**2+r1**2)**2)/(2*d)
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 

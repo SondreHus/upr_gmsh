@@ -38,7 +38,7 @@ def inside_mesh(points, mesh_verts, mesh_faces):
 
 
 
-def plot_voronoi_3d(voronoi: Voronoi, mesh_verts, mesh_faces, padding = .2):# b_plane_normals, b_plane_d, padding = .2, sites = None):
+def plot_voronoi_3d(voronoi: Voronoi, mesh_verts, mesh_faces, padding = .2, data = None):# b_plane_normals, b_plane_d, padding = .2, sites = None):
    
     # edges = get_voronoi_edges(voronoi, points)
     vertices = voronoi.vertices
@@ -76,17 +76,23 @@ def plot_voronoi_3d(voronoi: Voronoi, mesh_verts, mesh_faces, padding = .2):# b_
     # })
     # fig.layout.scene.camera.projection.type = "orthographic"
     # fig.show()
-    plot_trimesh(vertices, tris)
+    plot_trimesh(vertices, tris, intensity=np.ones(vertices.shape[0]), data = data)
     # ax.scatter(vertices[:,0], vertices[:,1], vertices[:,2])
     # plt.show()
     # for edge in edges:
     #     edge_coords = vertices[edge]
     #     ax.plot(edge_coords[:,0], edge_coords[:,1], edge_coords[:,2], color="C0")
-def plot_3d_points(points, radii = None, color = None):
+
+
+def plot_3d_points(points, radii = None, color = None, data = None, return_data = False):
+    if data is None:
+        data = []
     if radii is None:
         radii = 5
     if color is None:
         color = points[:,2]
+    
+    
     trace = go.Scatter3d(
             x = points[:,0], y = points[:,1], z = points[:,2], mode = 'markers', marker = dict(
             size = radii,
@@ -95,15 +101,18 @@ def plot_3d_points(points, radii = None, color = None):
         )
     )
 
-
+    data.append(trace)
+    if return_data:
+        return data
+    
     layout = go.Layout(title = '3D Scatter plot')
-    fig = go.Figure(data = [trace], layout = layout)
+    fig = go.Figure(data = data, layout = layout)
     fig.layout.scene.camera.projection.type = "orthographic"
     fig.show()
 
-def plot_trimesh(points, tris, intensity = None, colorscale="Viridis", plot_edges = True, padding = 0.1):
-    
-    data = []
+def plot_trimesh(points, tris, intensity = None, colorscale="Viridis", plot_edges = True, padding = 0.1, data = None):
+    if data is None:
+        data = []
     if intensity is None:
         intensity = points[:,2]
         intensity = np.maximum(np.minimum(intensity, 1), 0)
@@ -136,6 +145,7 @@ def plot_trimesh(points, tris, intensity = None, colorscale="Viridis", plot_edge
         "xaxis": {"range": [bounding_box[0] - padding, bounding_box[1] + padding]},
         "yaxis": {"range": [bounding_box[2] - padding, bounding_box[3] + padding]},
         "zaxis": {"range": [bounding_box[4] - padding, bounding_box[5] + padding]},
+        "aspectmode": 'cube'
     })
     fig1.layout.scene.camera.projection.type = "orthographic"
     fig1.show()
