@@ -114,6 +114,8 @@ def sphere_intersections(centers, radii):
     Returns:
         _type_: _description_
     """
+    centers = centers.reshape(-1,3,3)
+    radii = radii.reshape(-1,3)
     plane_centers, offset, rotation = flatten_sphere_centers(centers)
 
     # assert np.all(np.isclose(plane_centers[:,:,2], 0))
@@ -133,8 +135,6 @@ def sphere_intersections(centers, radii):
     y = ((radii[:,0]**2 - radii[:,2]**2 + i**2 + j**2)/(2*j) - i*x/j)
 
     z = np.sqrt(radii[:,0]**2 - x**2 - y**2)
-    #a = np.einsum('ij,ijk->ik', np.c_[x,y,z], rotation, optimize = True) + offset
-    #b = np.einsum('ij,ijk->ik', np.c_[x,y,-z], rotation, optimize = True) + offset
 
     return (np.c_[x,y,z].reshape((-1,1,3))@rotation + offset).reshape(-1,3), (np.c_[x,y,-z].reshape((-1,1,3))@rotation + offset).reshape(-1,3)
 
@@ -175,34 +175,3 @@ def plot_sphere(center, radius, ax):
     y = np.sin(u)*np.sin(v)*radius + center[1]
     z = np.cos(v)*radius + center[2]
     ax.plot_wireframe(x, y, z, color="r")
-
-if __name__ == "__main__":
-
-
-    test = np.array([[[0,0,0],[1,1,0],[1,1,1]], [[0,5,0],[1,4,0],[1,122,1]]])
-
-    a, c, i =  flatten_sphere_centers(test)
-    print(a)
-
-    centers = np.random.rand(1,3,3)
-    radii = np.array([
-        [0.6,0.6,0.6]
-    ])
-
-    c, o, i, = flatten_sphere_centers(centers)
-
-    front, back = sphere_intersections(centers, radii)
-    print(front)
-    print(back)
-
-    fig = plt.figure()
-    ax = fig.gca(projection="3d")
-    # ax.set_aspect("equal")
-
-    for center, radius in zip(centers.tolist()[0], radii.tolist()[0]):
-        plot_sphere(center, radius, ax)
-    ax.scatter(centers[0,:,0], centers[0,:,1], centers[0,:,2])
-    ax.scatter(front[:,0], front[:,1], front[:,2], c="b", zorder=10)
-    ax.scatter(back[:,0], back[:,1], back[:,2], c="b", zorder=10)
-
-    plt.show()

@@ -1,7 +1,7 @@
 import gmsh
 import numpy as np
 from pebi_gmsh.convert_GMSH import convert_GMSH
-from pebi_gmsh.site_data import (SiteData)
+from pebi_gmsh.constraints_2D.site_data import (SiteData)
 from typing import List
 def generate_constrained_mesh_2d(site_data: SiteData , h0 = 0.1, bounding_polygon = np.array([[0,0],[1,1]]), popup = False, algorithm = 5):
 

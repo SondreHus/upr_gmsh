@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from pebi_gmsh.site_data import (
+from pebi_gmsh.constraints_2D.site_data import (
     Intersection,
 )
-from pebi_gmsh.site_lengths import get_site_lenghts
-from pebi_gmsh.circle_intersections import circle_intersections
+from pebi_gmsh.utils_2D.site_lengths import get_site_lenghts
+from pebi_gmsh.utils_2D.circle_intersections import circle_intersections
 from typing import List
 import numpy as np
 

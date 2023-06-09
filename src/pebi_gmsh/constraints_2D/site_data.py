@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List
-from pebi_gmsh.polyline_interpolation import polyline_interpolation
+from pebi_gmsh.utils_2D.polyline_interpolation import polyline_interpolation
 from dataclasses import dataclass
 from typing import (List, Any)
 

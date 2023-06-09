@@ -1,11 +1,11 @@
 
 
 import numpy as np
-from pebi_gmsh.circle_intersections import circle_intersections
-from pebi_gmsh.intersections_2d import polyline_intersections
-from pebi_gmsh.f_segments import (create_f_segments)
-from pebi_gmsh.c_segments import (create_c_segments, generate_protection_sites)
-from pebi_gmsh.site_data import (SiteData, Intersection, FConstraint, CConstraint)
+from pebi_gmsh.utils_2D.circle_intersections import circle_intersections
+from pebi_gmsh.utils_2D.intersections_2d import polyline_intersections
+from pebi_gmsh.constraints_2D.f_segments import (create_f_segments)
+from pebi_gmsh.constraints_2D.c_segments import (create_c_segments, generate_protection_sites)
+from pebi_gmsh.constraints_2D.site_data import (SiteData, Intersection, FConstraint, CConstraint)
 from typing import List
 
 

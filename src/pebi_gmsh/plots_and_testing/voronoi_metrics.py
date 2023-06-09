@@ -35,18 +35,25 @@ def plot_metric(m,n, metric = lambda x,y, xt, yt: np.sqrt(np.square(x-xt) + np.s
                 grid[i,x,y] = val
             if border:
                 grid_2[x,y] = 1
-    
-    plt.imshow(grid_3)
-    plt.savefig(name + "borders.png")
-    plt.imshow(np.min(grid, axis=0))
-    plt.savefig(name + "dist.png")
+
+    fig, ax = plt.subplots()
+    plt.axis('off')
+    ax.imshow(grid_3)
+    ax.scatter(points[:, 1]*n, points[:, 0]*m, s=40)
+    # plt.show()
+    plt.savefig(name + "borders.png", dpi=700, bbox_inches='tight')
+    fig, ax = plt.subplots()
+    plt.axis('off')
+    ax.imshow(np.min(grid, axis=0))
+    ax.scatter(points[:, 1]*n, points[:, 0]*m, s=40)
+    plt.savefig(name + "dist.png", dpi=700, bbox_inches='tight')
     # plt.imshow(grid_2)
     # plt.show()
       
 # plot_metric(500,700, name="euclidean")
-# plot_metric(500,700, lambda x,y, xt, yt: (np.square(x-xt) + np.square(y-yt)), name="euclidean")
-# plot_metric(500,700, lambda x,y, xt, yt: np.abs(x-xt) + np.abs(y-yt), name="taxicab")
-# plot_metric(500,700, lambda x,y, xt, yt: max(np.abs(x-xt),np.abs(y-yt)), name="max")
+plot_metric(1000,1400, lambda x,y, xt, yt: (np.square(x-xt) + np.square(y-yt)), name="euclidean")
+plot_metric(1000,1400, lambda x,y, xt, yt: np.abs(x-xt) + np.abs(y-yt), name="taxicab")
+plot_metric(1000,1400, lambda x,y, xt, yt: max(np.abs(x-xt),np.abs(y-yt)), name="max")
 
 
 fig, ax = plt.subplots()
@@ -55,9 +62,11 @@ ax.set_xlim((0,1.4))
 ax.set_ylim((0,1))
 # ax.set_aspect("equal", "box")
 fig.tight_layout()
-plt.savefig("points.png")
-print("hi")
+plt.axis('off')
+plt.savefig("points.png", dpi=700, bbox_inches='tight')
+# print("hi")
 
 vor = Voronoi(points@np.array([[0, -1],[1.4,0]]))
 voronoi_plot_2d(vor)
+plt.axis('off')
 plt.show()
