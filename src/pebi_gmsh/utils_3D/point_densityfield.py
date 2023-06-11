@@ -19,7 +19,7 @@ def point_inscribed_distance(point, triangles, edges, points):
     tri_normals = np.cross(triangles[:,1] - triangles[:,0], triangles[:,2] - triangles[:,0])
     tri_normals = tri_normals/np.linalg.norm(tri_normals, axis=1).reshape(-1,1)
 
-    tri_plane_d = np.sum(tri_normals * triangles[:,0], axis=1)
+    tri_plane_d = -np.sum(tri_normals * triangles[:,0], axis=1)
 
     tri_border_normals = np.cross(np.tile(tri_normals, 3).reshape(-1,3), (np.roll(triangles, -1, axis=1) - triangles).reshape(-1,3))
     tri_border_normals = (tri_border_normals/np.linalg.norm(tri_border_normals, axis=1).reshape(-1,1))

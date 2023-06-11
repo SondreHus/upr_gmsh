@@ -14,8 +14,8 @@ from scipy.interpolate import interp1d
 # R: Ideal vertex radius
 # D: Edge distance of cell triangle
 # F: Density field cell size
-
-Primary_scale_factor = 2/4
+# B: Edge density coefficient
+Primary_scale_factor = 1/2
 
 I_R_COEFF = Primary_scale_factor * np.sqrt(5)/2
 I_D_COEFF = Primary_scale_factor * np.sqrt(3)
@@ -31,10 +31,7 @@ R_D_COEFF = I_D_COEFF/I_R_COEFF
 H_D_COEFF = I_D_COEFF/I_H_COEFF
 R_H_COEFF = I_R_COEFF/I_H_COEFF
 
-# C: Radius of the intersection between the two spheres on opposing side of an edge
-# I_C_COEFF = 1/3
-# R_C_COEFF = I_C_COEFF/I_R_COEFF
-
+EDGE_LIPSCHITZ_FACTOR = 1/2
 
 def get_filled_points(border_coords, normal, constraint_triangles, max_size = 0.1):
     
@@ -91,62 +88,46 @@ def get_filled_points(border_coords, normal, constraint_triangles, max_size = 0.
     return node_coords, tri_nodes
 
 
+
 def get_edge_vertices(p_start, r_start, p_end, r_end, triangle_coords, edge_coords, point_coords, max_inscribed):
     line_dir = p_end - p_start
-    line_dir = line_dir/np.linalg.norm(line_dir)
+    line_len = np.linalg.norm(line_dir)
+    line_dir = line_dir/line_len
     density_field = LineInscribedField(line_dir, triangle_coords, edge_coords, point_coords)
+
+    lipschitz = lambda x: min((x)*EDGE_LIPSCHITZ_FACTOR, (line_len - x)*EDGE_LIPSCHITZ_FACTOR)
 
     dist_start = r_start
     dist_end = r_end
 
+    
+
     v_start = p_start + line_dir * dist_start
     v_end = p_end - line_dir * dist_end
+
+
+    r_v_start = min(density_field.distance(v_start) * I_B_COEFF, max_inscribed, lipschitz(dist_start))
+    r_v_end = min(density_field.distance(v_end) * I_B_COEFF, max_inscribed, lipschitz(line_len-dist_end))
+
     
-    # for i in range(10):
-    #     r_v_start = min(density_field.distance(v_start) * I_B_COEFF, max_inscribed)
-    #     r_v_end = min(density_field.distance(v_end) * I_B_COEFF, max_inscribed)
-
-    #     h_start_diff = circle_intersection_height(r_start, r_v_start, dist_start) - r_v_start*np.sqrt(3)/2
-    #     h_end_diff = circle_intersection_height(r_end, r_v_end, dist_end) - r_v_end*np.sqrt(3)/2
-
-    #     dist_start += h_start_diff
-    #     dist_end += h_end_diff
-
-    #     v_start = p_start + line_dir * dist_start
-    #     v_end = p_end - line_dir * dist_end
-    
-    # v_start = p_start + line_dir * dist_start
-    # v_end = p_end - line_dir * dist_end
-    
-    # for i in range(10):
-    r_v_start = min(density_field.distance(v_start) * I_B_COEFF, max_inscribed)
-    r_v_end = min(density_field.distance(v_end) * I_B_COEFF, max_inscribed)
-
-    # #     h_start_diff = circle_intersection_height(r_start, r_v_start, dist_start) - r_v_start*np.sqrt(3)/2
-    # #     h_end_diff = circle_intersection_height(r_end, r_v_end, dist_end) - r_v_end*np.sqrt(3)/2
-
     dist_start = r_start + r_v_start/2
     dist_end = r_end + r_v_end/2
 
     v_start = p_start + line_dir * dist_start
     v_end = p_end - line_dir * dist_end
-    
-    #     dist_start = r_start + 0.5 * r_v_start #h_start_diff
-    #     dist_end = r_end + 0.5 * r_v_end #h_end_diff
 
-    #     v_start = p_start + line_dir * dist_start
-    #     v_end = p_end - line_dir * dist_end
-    
 
     current_dist = 0
     current_radius = r_v_start
     max_dist = np.linalg.norm(v_end-v_start)
     dists = []
-    while current_dist + current_radius/2 < max_dist:
+    while current_dist + current_radius < max_dist:
         current_dist += current_radius
         dists.append(current_dist)
-        current_radius = min(density_field.distance(v_start + current_dist*line_dir) * I_B_COEFF, max_inscribed)
-    
+        current_radius = min(density_field.distance(v_start + current_dist*line_dir) * I_B_COEFF, max_inscribed, lipschitz(current_dist + dist_start))
+
+
+
     # ideal_dist = max_dist - current_radius
     dists = np.array(dists)*(max_dist/(current_dist + current_radius))
     dists = np.r_[0, dists, max_dist]
@@ -154,13 +135,19 @@ def get_edge_vertices(p_start, r_start, p_end, r_end, triangle_coords, edge_coor
     radii[0] = r_v_start
     radii[-1] = r_v_end
     for i in range(5):
-        radii[1:-1] = np.array([min(density_field.distance(v_start + dist * line_dir) * I_B_COEFF, max_inscribed) for dist in dists])[1:-1]
+        radii[1:-1] = np.array([min(density_field.distance(v_start + dist * line_dir) * I_B_COEFF, max_inscribed, lipschitz(dist)) for dist in dists])[1:-1]
         mean_radii = (radii[1:] + radii[:-1])/2
         forces = mean_radii - (dists[1:] - dists[:-1])
 
         dists[1:-1] += (forces[:-1] - forces[1:]) * 0.2
-    
-    return v_start.reshape(1,3) + dists.reshape(-1,1)*line_dir, radii*D_R_COEFF * 1.8
+    mean_dist = (dists[1:] - dists[:-1])
+    if mean_dist.shape[0] > 1:
+        mean_dist = (mean_dist[1:] + mean_dist[:-1])/2
+        mean_dist = np.r_[mean_dist[0], mean_dist, mean_dist[-1]]
+    else:
+        mean_dist = np.r_[mean_dist[0], mean_dist[0]]
+
+    return v_start.reshape(1,3) + dists.reshape(-1,1)*line_dir, mean_dist * 1.2#radii*D_R_COEFF * 1.8
 
 class ConstrainedEdgeCollection:
 
@@ -236,9 +223,9 @@ class ConstrainedEdgeCollection:
         return np.array(idx)
 
     def add_face(self, vertex_idx):
+        
         forward_oriented = []
-        # start_edge = self.edge_corners[edge_idx[0]]
-        # face_verts = []
+
         edge_idx = []
         for i in range(len(vertex_idx)):
             a = vertex_idx[i]
@@ -261,29 +248,6 @@ class ConstrainedEdgeCollection:
             forward_oriented.append(True)
 
         
-
-        # if start_edge[0] in self.edge_corners[edge_idx[1]]:
-        #     last_vert = start_edge[0]
-        #     forward_oriented.append(False)
-        # elif start_edge[1] in self.edge_corners[edge_idx[1]]:
-        #     last_vert = start_edge[1]
-        #     forward_oriented.append(True)
-        # else:
-        #     raise Exception("Face edge index {} is not connected to edge index {}".format(edge_idx[0], edge_idx[1]))
-        
-        # face_verts.append(last_vert)
-        
-        # for edge_id in edge_idx[1:]:
-        #     if last_vert not in self.edge_corners[edge_id]:
-        #         raise Exception("Face edge index {} is not connected to previous vertex".format(edge_id))
-        #     elif last_vert == self.edge_corners[edge_id, 0]:
-        #         forward_oriented.append(True)
-        #         last_vert = self.edge_corners[edge_id, 1]
-        #     else:
-        #         forward_oriented.append(False)
-        #         last_vert = self.edge_corners[edge_id, 0]
-        #     face_verts.append(last_vert)
-
         face_normal = np.cross(
             (self.vertex_coords[self.edge_corners[edge_idx[0] , 1]] - self.vertex_coords[self.edge_corners[edge_idx[0], 0]]) * (1 if forward_oriented[0] else -1),
             (self.vertex_coords[self.edge_corners[edge_idx[-1], 0]] - self.vertex_coords[self.edge_corners[edge_idx[-1],1]]) * (1 if forward_oriented[-1] else -1),
@@ -314,7 +278,7 @@ class ConstrainedEdgeCollection:
                     constraint_triangle_coords.append(self.vertex_coords[self.constraint_tris[face_id]])
 
             constraint_triangle_coords = np.vstack(constraint_triangle_coords)
-            # constraint_triangle_coords = self.vertex_coords[constraint_triangles]
+          
 
             constraint_edge_coords = self.vertex_coords[np.delete(self.edge_corners, edge_id, axis=0)]
 
@@ -342,24 +306,7 @@ class ConstrainedEdgeCollection:
             self.edge_verts.append(np.r_[[edge_corner_verts[0]], new_vert_idx, [edge_corner_verts[1]]])
             
             
-        # for length, vertex_idx in zip(self.edge_segment_length, self.edge_corners):
 
-            # dist = np.sum((self.vertex_coords[vertex_idx[0]] - self.vertex_coords[vertex_idx[1]])**2)
-            # vertex_num = int(np.floor(dist/length + 0.5))
-
-            # interp_step_size = 1/(vertex_num+1)
-            # padding = 0.05
-            # interp = np.linspace(0 + padding, 1 - padding, vertex_num, endpoint=False)[1:]
-
-            # point_coords = self.vertex_coords[vertex_idx[0]] + (self.vertex_coords[vertex_idx[1]] - self.vertex_coords[vertex_idx[0]])*interp[:,None]
-
-            # new_vert_idx = self.add_vertices(point_coords)
-
-            # self.edge_verts.append(np.r_[[vertex_idx[0]], new_vert_idx, [vertex_idx[1]]])
-
-
-
-    # TODO: this needs to handle the corner cases of a face 
     def calculate_edge_vertex_radii(self):
 
         for corner_id, corner_vert in enumerate(self.corner_verts):
@@ -376,33 +323,9 @@ class ConstrainedEdgeCollection:
 
             points = self.vertex_coords[np.delete(self.corner_verts, corner_id)]
 
-            self.vertex_radii[corner_vert] = min(point_inscribed_distance(self.vertex_coords[corner_vert], tris, edges, points)/3, self.max_size*2)
-        # self.vertex_radii[:] = 0.2
-    #     vert_edge_count = np.zeros(self.vertex_coords.shape[0])
-    #     vert_total_distance = np.zeros(self.vertex_coords.shape[0])
-    #     for edge in self.edge_verts:
-    #         for i in range(len(edge)-1):
-    #             dist = np.sqrt(np.sum((self.vertex_coords[edge[i]] - self.vertex_coords[edge[i+1]])**2))
-    #             vert_total_distance[edge[i]] += dist
-    #             vert_total_distance[edge[i+1]] += dist
-
-    #             vert_edge_count[edge[i]] += 1
-    #             vert_edge_count[edge[i+1]] += 1
-    #     # sqrt(3/8) * side length of tetrahedron
-        
-    #     vert_avg_dist = vert_total_distance/vert_edge_count
-
-    #     # TODO: This currently only sort of handles 90 degree angles, this needs to ge generalized for 
-    #     # all angles as well as incorporate a better system for edge vertex density 
-
-    #     # Ugh, bad coder, bad!
-    #     vert_scalar = np.ones(vert_avg_dist.shape)
-    #     for edge in self.edge_verts:
-    #         vert_scalar[edge[1]] = 0.82
-    #         vert_scalar[edge[-2]] = 0.82
+            self.vertex_radii[corner_vert] = min(point_inscribed_distance(self.vertex_coords[corner_vert], tris, edges, points)*1/3, self.max_size*2)
 
 
-    #     self.vertex_radii = np.sqrt(3/8) * vert_avg_dist * vert_scalar
 
     def triangulate_face(self, face_id):
         
@@ -410,16 +333,6 @@ class ConstrainedEdgeCollection:
         
         face_tris = triangulate_polygon(flattened_coords[:,:2]).astype(int)
 
-        # face_tris = self.face_corners[face_id][face_tris]
-        # TODO: Fix concave faces
-        # triangles = []
-        # edges = self.face_edges[face_id]
-        # orientation = self.face_edge_dirs[face_id]
-        # pivot_vertex = self.vertex_coords[self.edge_corners[edges[0], (0 if orientation[0] else 1)]]
-        # for edge, dir in zip(edges[1:-1], orientation[1:-1]):
-        #     edge_verts = self.vertex_coords[self.edge_corners[edge, ::(1 if dir else -1)]]
-        #     triangles.append(np.vstack((pivot_vertex, edge_verts)))
-        
         return self.face_corners[face_id][face_tris]
 
     def get_constraint_trignales(self, face_id):
@@ -455,53 +368,26 @@ class ConstrainedEdgeCollection:
         edge_vert_coords = self.vertex_coords[loop_vert_ids]
         flattened_verts, invertion, origo = flatten_planar_centers(edge_vert_coords, face_normal)
         
-        # flattened_dirs = np.roll(flattened_verts, -1, axis=0) - flattened_verts
-        # flattened_dirs = flattened_dirs/np.sqrt(np.sum(flattened_dirs**2, axis=1))[:, None]
-        # flattened_dirs = flattened_dirs@np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
 
-        # The true main triangle vertices can be arbitrarily close to these vertices in accordance with their target radii
         main_triangle_inscribed = np.zeros(loop_vert_ids.shape[0])
-        # main_triangle_radius_factors = np.zeros(loop_vert_ids.shape[0]) 
-        # corner_factor = np.array([0 if (vert_id in self.corner_verts) else 1 for vert_id in loop_vert_ids])
-        # for i in range(10):
-            # print(i)
-        _ , main_triangle_verts = circle_intersections(
-            flattened_verts[:,:2], 
-            np.roll(flattened_verts[:,:2], -1, axis=0), 
-            # np.sqrt(self.vertex_radii[loop_vert_ids]**2 - (main_triangle_inscribed*I_H_COEFF)**2) + main_triangle_inscribed * I_H_COEFF,
-            # np.sqrt(self.vertex_radii[np.roll(loop_vert_ids, -1)]**2 - (main_triangle_inscribed * I_H_COEFF)**2) + main_triangle_inscribed * I_H_COEFF,
 
-            self.vertex_radii[loop_vert_ids], #+  main_triangle_radius_factors * corner_factor,
-            self.vertex_radii[np.roll(loop_vert_ids, -1)] #+  main_triangle_radius_factors * np.roll(corner_factor,-1)
-        )
+        try:
+            _ , main_triangle_verts = circle_intersections(
+                flattened_verts[:,:2], 
+                np.roll(flattened_verts[:,:2], -1, axis=0), 
+
+                self.vertex_radii[loop_vert_ids], 
+                self.vertex_radii[np.roll(loop_vert_ids, -1)]
+            )
+        except:
+            raise Exception("Error linking the inner loop vertices together")
+        
         main_triangle_verts = np.pad(main_triangle_verts, ((0,0),(0,1)))
         for j, t_m in enumerate(main_triangle_verts): 
             main_triangle_inscribed[j] = min(density_field.distance(t_m @ invertion.T + origo), self.max_size / I_D_COEFF)
             
         main_triangle_radii = main_triangle_inscribed * I_R_COEFF
-
-            # tris = np.concatenate((
-            #     (main_triangle_verts).reshape(-1,1,3),
-            #     flattened_verts.reshape(-1,1,3),
-            #     np.roll(flattened_verts, -1, axis=0).reshape(-1,1,3)
-            # ), axis=1)
-
-            # tri_radii = np.vstack((
-            #     main_triangle_radii,
-            #     self.vertex_radii[loop_vert_ids],
-            #     self.vertex_radii[np.roll(loop_vert_ids, -1)]
-            # )).T
-
-            # inner, _ = sphere_intersections(tris, tri_radii)
-                    
-            # height = np.abs(inner[:,2])
-            # inner[:,2] = 0
-            # target_height = np.array([min(density_field.distance(tri_center), self.max_size / I_D_COEFF) for tri_center in (inner@invertion.T + origo)]) * I_H_COEFF
-            # height_diff = height - target_height
-            # main_triangle_radius_factors += height_diff/2
-
-
-        
+     
         main_triangle_vert_ids = self.add_vertices(main_triangle_verts@invertion.T + origo, constrained_radius=True)
 
 
@@ -530,15 +416,12 @@ class ConstrainedEdgeCollection:
             
             avg_main_radii = (main_triangle_radii[i-1] + main_triangle_radii[i])/2
 
-            sample_angles = np.linspace(angle_from, angle_from + angle_diff, 12,  endpoint=False)[1:]
+            sample_angles = np.linspace(angle_from, angle_from + angle_diff, 12,  endpoint=True)[1:]
 
             sample_verts = corner + np.array([np.cos(sample_angles), np.sin(sample_angles), np.zeros(sample_angles.shape)]).T * (r + avg_main_radii)
 
             sample_radii = np.minimum(np.array([density_field.distance(sample_vert) for sample_vert in (sample_verts@invertion.T + origo)]) * I_R_COEFF , self.max_size * D_R_COEFF) 
 
-
-            # Sample-wise 1/d
-            # inverts = np.r_[main_triangle_radii[i-1]**-1, sample_radii**-1, main_triangle_radii[i]**-1] / R_D_COEFF 
 
             radii_func = interp1d(sample_angles, sample_radii, fill_value="extrapolate")
 
@@ -546,66 +429,31 @@ class ConstrainedEdgeCollection:
             angle = angle_from
             radius = main_triangle_radii[i-1]
             angle_dir = np.sign(angle_diff)
-            while 0.5 * (radius + main_triangle_radii[i]) * R_D_COEFF/r < angle_dir*(angle_from + angle_diff - angle):
+            while 0.6 * (radius + main_triangle_radii[i]) * R_D_COEFF/r < angle_dir*(angle_from + angle_diff - angle):
                 angle += angle_dir*radius*R_D_COEFF/r
                 angles.append(angle)
                 radius = radii_func(angle)
             angles = np.array(angles)
             if angles.shape[0] > 0 :
-                target_angle = angle_from + angle_diff - main_triangle_radii[i]* R_D_COEFF/r
-                angles = (angles - angle_from) * target_angle/angles[-1] + angle_from
-            # steps = int(np.floor(r*abs(angle_diff) * np.sum(inverts)/(inverts.shape[0])))
-        
+                target_angle = angle_from + angle_diff - angle_dir*(main_triangle_radii[i] * R_D_COEFF/r)
+                angles = (angles - angle_from) * (target_angle-angle_from)/(angle-angle_from) + angle_from
 
-            # angles = np.linspace(angle_from, angle_from + angle_diff, steps+1, endpoint=False)[1:]
-            center_dists = r*np.ones(angles.shape[0])
 
-            fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * (center_dists).reshape(-1,1)#* R_C_COEFF) 
-            
+            fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * r 
             if len(angles) > 0:
                 
+                for k in range(20):
+                    
                     inscribed_radii = np.minimum(np.array([density_field.distance(fan_vert) for fan_vert in (fan_verts@invertion.T + origo)]), self.max_size/I_D_COEFF)
                     radii = inscribed_radii * I_R_COEFF
-                # for k in range(40):
+                    dists = np.sqrt(np.sum((np.vstack((fan_verts, main_triangle_verts[i])) - np.vstack((main_triangle_verts[i-1], fan_verts)))**2, axis=1))
+                    mean_radii = (np.r_[main_triangle_radii[i-1], radii] + np.r_[radii, main_triangle_radii[i]])/2
+                    forces = 1 - (dists/mean_radii)
+                    force_diffs = (forces[1:] - forces[:-1])
+                    angles += force_diffs * 0.01
                     
-                    # dists = np.sqrt(np.sum((np.vstack((fan_verts, main_triangle_verts[i])) - np.vstack((main_triangle_verts[i-1], fan_verts)))**2, axis=1))
-                    # mean_radii = (np.r_[main_triangle_radii[i-1], radii] + np.r_[radii, main_triangle_radii[i]])/2
-                    # forces = 1 - (dists/mean_radii)
-                    # force_diffs = (forces[1:] - forces[:-1])*(mean_radii[1:] + mean_radii[:-1])
-                    # angles += force_diffs / 2
-                    
-                    # tris = np.concatenate((
-                    #     np.vstack((main_triangle_verts[i-1], fan_verts)).reshape(-1,1,3),
-                    #     np.vstack((fan_verts, main_triangle_verts[i])).reshape(-1,1,3),
-                    #     np.tile(corner, fan_verts.shape[0]+1).reshape(-1,1,3)
-                    # ), axis=1)
-
-                    # tri_radii = np.vstack((
-                    #     np.r_[main_triangle_radii[i-1], radii],
-                    #     np.r_[radii, main_triangle_radii[i]],
-                    #     np.tile(r, fan_verts.shape[0]+1)
-                    # )).T
-
-                    # inner, _ = sphere_intersections(tris, tri_radii)
-
-                    
-                    # height = np.abs(inner[:,2])
-                    # inner[:,2] = 0
-
-                    # height = circle_intersection_height(np.repeat(r,radii.shape[0]), radii*R_H_COEFF, center_dists)
-                    # target_height = inscribed_radii*I_H_COEFF #np.minimum(np.array([density_field.distance(tri_center) for tri_center in (inner@invertion.T + origo)]), self.max_size/I_D_COEFF) * I_H_COEFF
-                    
-                    # height_diff = height - target_height
-                    # height_diff = (height_diff[:-1] + height_diff[1:])/2
-                    # center_dists += height_diff/2
-                    # print(height_diff)
-                    # fan_center_dist = np.sqrt(r**2 - (inscribed_radii * I_H_COEFF)**2) + (inscribed_radii * I_H_COEFF)
-                    
-                    # fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * center_dists[:,None]
-
-                # dists = np.sqrt(np.sum((np.vstack((fan_verts, main_triangle_verts[i])) - np.vstack((main_triangle_verts[i-1], fan_verts)))**2, axis=1))
-                # dists = (dists[1:] + dists[:-1])/2
-                # radii = dists * D_R_COEFF
+                    fan_verts = corner + np.array([np.cos(angles), np.sin(angles), np.zeros(angles.shape)]).T * r 
+                   
                 fan_vert_ids = self.add_vertices(fan_verts@invertion.T + origo, constrained_radius=True)
                 
                 inner_loop_vert_ids = inner_loop_vert_ids + fan_vert_ids.tolist()
@@ -624,22 +472,18 @@ class ConstrainedEdgeCollection:
                 
                 self.vertex_radii[fan_vert_ids] = radii 
                 
-                assert np.all(test_triangle_intersection(self.vertex_coords[self.triangles[test_id_start:]], self.vertex_radii[self.triangles[test_id_start:]]))
+                
         
             else:
                 self.triangles = np.vstack((self.triangles, [loop_vert_ids[i], main_triangle_vert_ids[i], main_triangle_vert_ids[i-1]]))
                 dist = np.sum((self.vertex_coords[main_triangle_vert_ids[i]] - self.vertex_coords[main_triangle_vert_ids[i-1]])**2)**0.5
                 self.vertex_radii[main_triangle_vert_ids[i]] = max(self.vertex_radii[main_triangle_vert_ids[i]], dist * D_R_COEFF)
                 self.vertex_radii[main_triangle_vert_ids[i-1]] = max(self.vertex_radii[main_triangle_vert_ids[i-1]], dist * D_R_COEFF)
-                self.padding_triangles = np.r_[self.padding_triangles, True]
-                
-                assert test_triangle_intersection(self.vertex_coords[self.triangles[-1]], self.vertex_radii[self.triangles[-1]])
-            # steps = (np.sqrt(np.sum(dir_0**2)) + np.sqrt(np.sum(dir_1**2))/2) 
+                self.padding_triangles = np.r_[self.padding_triangles, True]              
+
                 
         inner_loop_vert_ids = np.array(inner_loop_vert_ids)
 
-
-        # return inner_loop_vert_ids
         self.inner_loops[face_id] = inner_loop_vert_ids
 
         return

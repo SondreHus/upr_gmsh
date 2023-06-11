@@ -31,22 +31,62 @@ def line_pair_center(p0, v0, p1, v1):
     centers[aligned] = p0[aligned] + v1[aligned]/2
     return centers#(p0 + v0*t0 + p1 + v1*t1)/2
 
-def line_line_distance(origin_point, origin_line_dir, target_point, target_line_dir):
+
+# def line_dir_intersection(origin_point, )
+# @jit(cache=True)
+def line_line_distance(origin_point: np.ndarray, origin_line_dir: np.ndarray, target_points: np.ndarray, target_line_dirs: np.ndarray, tol = 1e-4):
     
+    target_points = target_points.reshape(-1,3)
+    target_line_dirs = target_line_dirs.reshape(-1,3)
+    
+    dists = np.zeros(target_points.shape[0])
+    dirs = np.zeros(target_line_dirs.shape)
+    
+    for i in range(target_points.shape[0]):
+
+        target_point = target_points[i]
+        target_line_dir = target_line_dirs[i]
+
+        orthogonal_0 = np.cross(origin_line_dir, target_line_dir)
+
+        # Lines are paralell
+        if np.sum(orthogonal_0**2) < tol:
+            direction = (target_point-origin_point) - origin_line_dir * (np.sum((target_point-origin_point)*origin_line_dir, axis=-1))
+            dists[i] = np.linalg.norm(direction)
+            dirs[i] = direction
+        
+        else:
+
+            orthogonal_0 = orthogonal_0/np.linalg.norm(orthogonal_0)
+            orthogonal_1 = np.cross(origin_line_dir, orthogonal_0)
+            
+
+            test_samples = np.linspace(0,2*np.pi, 36)
+
+            test_dirs = np.sin(test_samples).reshape(-1,1)*orthogonal_0 + np.cos(test_samples).reshape(-1,1)*orthogonal_1
+
+            sample_dists = line_distance(origin_point, test_dirs, target_point, target_line_dir)
+
+            smallest = np.argmin(np.abs(sample_dists))
+
+            dists[i] = np.abs(sample_dists[smallest])
+            dirs[i] = test_dirs[smallest]*np.sign(sample_dists[smallest])
+
+    return dists, dirs
     # Smallest inscribes sphere is always on the more acute angle
-    sign = np.where(np.sum(origin_line_dir.reshape(1,3)* target_line_dir, axis=-1) >= 0, 1, -1)
+    # sign = np.where(np.sum(origin_line_dir.reshape(1,3)* target_line_dir, axis=-1) >= 0, 1, -1)
 
-    center = line_pair_center(origin_point, origin_line_dir, target_point, target_line_dir)
+    # center = line_pair_center(origin_point, origin_line_dir, target_point, target_line_dir)
     
-    # Normal of the plane spanned by the closest point between the two lines, and the two intersecting points
-    plane_normal = np.cross(sign.reshape(-1,1)*target_line_dir + origin_line_dir, origin_point-center)
-    plane_normal = plane_normal/np.sqrt(np.sum(plane_normal**2, axis=-1)).reshape(-1,1)
+    # # Normal of the plane spanned by the closest point between the two lines, and the two intersecting points
+    # plane_normal = np.cross(sign.reshape(-1,1)*target_line_dir + origin_line_dir, origin_point-center)
+    # plane_normal = plane_normal/np.sqrt(np.sum(plane_normal**2, axis=-1)).reshape(-1,1)
     
 
-    sphere_dir = np.cross(origin_line_dir, plane_normal)
-    sphere_dir = sphere_dir/np.sqrt(np.sum(sphere_dir**2, axis=-1)).reshape(-1,1)
+    # sphere_dir = np.cross(origin_line_dir, plane_normal)
+    # sphere_dir = sphere_dir/np.sqrt(np.sum(sphere_dir**2, axis=-1)).reshape(-1,1)
     
-    return line_distance(origin_point, sphere_dir.reshape(-1,3), target_point.reshape(-1,3), sign.reshape(-1,1)*target_line_dir.reshape(-1,3)), sphere_dir
+    # return line_distance(origin_point, sphere_dir.reshape(-1,3), target_point.reshape(-1,3), sign.reshape(-1,1)*target_line_dir.reshape(-1,3)), sphere_dir
 
 
 
@@ -60,12 +100,13 @@ class LineInscribedField:
     
     def __init__(self, line_dir, triangle_coords, edge_coords, point_coords):
         
+
         self.line_dir = line_dir
         self.triangle_coords = triangle_coords
         self.edge_coords = edge_coords
         self.point_coords = point_coords
 
-        self.edge_dirs = edge_coords[:,0,:]- edge_coords[:,1,:]
+        self.edge_dirs = edge_coords[:,1] - edge_coords[:,0] 
         self.edge_dirs = self.edge_dirs/np.sqrt(np.sum(self.edge_dirs**2, axis=-1)).reshape(-1,1)
 
         self.edge_starts = np.sum(self.edge_dirs * edge_coords[:,0,:], axis=-1)
@@ -285,3 +326,25 @@ def triangle_inscribed_circle_field(triangles, origin_normal, field_coeff = 2, d
 
 
 
+if __name__ == "__main__":
+
+    dir_0 = np.array([1,0,0])
+
+    dir_1 = np.random.rand(3)*2 - 1
+    dir_1 = dir_1/np.linalg.norm(dir_1)
+
+
+    p0 = np.zeros(3)
+    p1 = np.random.rand(3)*2 - 1
+
+    orthogonal_0 = np.array([0,0,1])
+    orthogonal_1 = np.array([0,1,0])
+
+    test_samples = np.linspace(0,2*np.pi, 180)
+    test_dirs = np.sin(test_samples).reshape(-1,1)*orthogonal_0 + np.cos(test_samples).reshape(-1,1)*orthogonal_1
+
+    smallest_dist = min([abs(line_distance(p0, test_dir, p1, dir_1)) for test_dir in test_dirs])
+
+    dist = line_line_distance(p0, dir_0, p1, dir_1)
+
+    print(smallest_dist, dist)
