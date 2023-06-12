@@ -162,11 +162,10 @@ def plane_plane_distance(origin_normal: np.ndarray, target_point: np.ndarray, ta
 @jit(cache=True)
 def line_distance(p_o: np.ndarray, n_o: np.ndarray, p_t: np.ndarray, n_t: np.ndarray, tol = 1e-5):
     
-    # o_size = n_o.reshape(-1,3).shape[0]
-    # t_size = n_t.reshape(-1,3).shape[0]
+
     n_o = n_o.reshape(-1,3)#np.repeat(n_o.reshape(-1,3), t_size, axis=0)
-    n_t = n_t.reshape(-1,3)#np.repeat(n_t.reshape(-1,3), o_size, axis=0)
-    # p_o = p_o.reshape(-1,3)
+    n_t = n_t.reshape(-1,3)
+
     p_t = p_t.reshape(-1,3)#np.repeat(p_t.reshape(-1,3), o_size, axis=0)
 
     a = n_o - np.sum(n_o*n_t, axis=-1).reshape(-1,1) * n_t
@@ -255,10 +254,9 @@ class InscribedSphereField:
         self.edge_d_start = -np.sum(self.tri_dirs * tri_points, axis=-1)
         self.edge_d_end = -np.sum(self.tri_dirs * np.roll(tri_points, -1, axis=1), axis=-1)
 
-# triangle = np.array([[0.2, 0.2, 0.1],[0.7, 0.2, 0.1],[0.2, 0.7, 0.1]])
-# normal = np.array([0,0,1])
+
     def distance(self, xyz):
-        # ones = np.ones(self.t_normals.shape[0])
+
         side = np.where(np.sum(self.t_normals*xyz, axis=-1) + self.t_ds >= 0 , 1, -1)
 
         inside_u = np.sum(self.p_tri_normals_0*xyz, axis=-1) <= -self.p_tri_d_0
