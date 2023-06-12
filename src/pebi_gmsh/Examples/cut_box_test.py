@@ -99,9 +99,9 @@ fig = go.Figure(data=data,
         height = 850,
         scene_camera = camera,
         scene = dict( 
-            xaxis=dict(range=[0,1]),
-            yaxis=dict(range=[0,1]),
-            zaxis=dict(range=[-0,1]),
+            xaxis=dict(range=[-.05,1.05]),
+            yaxis=dict(range=[-.05,1.05]),
+            zaxis=dict(range=[-0.05,1.05]),
             aspectmode="cube",
 
         ),
